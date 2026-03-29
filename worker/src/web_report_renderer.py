@@ -13,6 +13,7 @@ from datetime import datetime
 from typing import Any
 
 from jinja2 import Environment
+from markupsafe import Markup
 
 _MENTION_PATTERN = re.compile(r"\[(\d+)\]")
 _TEMPLATE_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
@@ -165,12 +166,12 @@ def _build_quotes_payload(
 def _render_mentions(
     text: str,
     user_directory: dict[str, dict[str, str]],
-) -> str:
+) -> Markup | str:
     """将 [123456] 替换为受控 HTML 胶囊，其余内容全部转义。"""
     if not text:
         return ""
 
-    result: list[str] = []
+    result: list[Markup | str] = []
     last_end = 0
 
     for match in _MENTION_PATTERN.finditer(text):
@@ -184,14 +185,14 @@ def _render_mentions(
         last_end = match.end()
 
     result.append(_escape_text_segment(text[last_end:]))
-    return "".join(result)
+    return Markup("").join(result)
 
 
-def _escape_text_segment(text: str) -> str:
-    return html.escape(text, quote=False).replace("\n", "<br>")
+def _escape_text_segment(text: str) -> Markup:
+    return Markup(html.escape(text, quote=False).replace("\n", "<br>"))
 
 
-def _build_user_capsule_html(name: str, avatar_data: str) -> str:
+def _build_user_capsule_html(name: str, avatar_data: str) -> Markup:
     capsule_style = (
         "display:inline-flex;align-items:center;background:rgba(0,0,0,0.05);"
         "padding:2px 6px 2px 2px;border-radius:12px;margin:0 2px;"
@@ -202,7 +203,7 @@ def _build_user_capsule_html(name: str, avatar_data: str) -> str:
     )
     name_style = "font-size:0.85em;color:inherit;font-weight:500;line-height:1;"
 
-    return (
+    return Markup(
         f'<span class="user-capsule" style="{capsule_style}">'
         f'<img src="{html.escape(avatar_data, quote=True)}" style="{img_style}">'
         f'<span style="{name_style}">{html.escape(name)}</span>'
