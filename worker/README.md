@@ -15,7 +15,10 @@
 
 ## 快速部署
 
-1. 创建 KV Namespace，并把 `wrangler.jsonc` 里的 `id` 改成真实值。
+按钮指向的是仓库里的 `worker/` 子目录，这个子目录本身就是一个独立 Worker 项目。
+项目配置文件是 `wrangler.jsonc`，不使用 `wrangler.toml`。
+
+1. 创建 KV Namespace，并把 `worker/wrangler.jsonc` 里的 `id` 改成真实值。
 2. 安装依赖并写入 Secret：
 
 ```bash
@@ -32,18 +35,11 @@ npm run deploy
 
 ## 插件配置
 
-```bash
-{
-  "basic": {
-    "output_format": "web"
-  },
-  "web_report": {
-    "enabled": true,
-    "worker_api_base": "https://your-worker.example.workers.dev",
-    "upload_token": "与 Worker Secret 一致",
-    "public_base_url": "https://your-report-domain.example.com",
-    "report_ttl_days": 7,
-    "request_timeout_seconds": 20
-  }
-}
-```
+在 AstrBot 的插件配置 WebUI 里设置：
+
+- `基础设置 -> 输出格式` 设为 `web`
+- `网页报告设置 -> 启用网页报告发送` 打开
+- `网页报告设置 -> Worker API 地址` 填 Worker 域名
+- `网页报告设置 -> Worker 上传令牌` 填和 `UPLOAD_TOKEN` 一致的值
+- `网页报告设置 -> 公开链接基础地址` 按需填写自定义域名
+- `网页报告设置 -> 报告保留天数`、`上传超时时间（秒）` 按需调整
