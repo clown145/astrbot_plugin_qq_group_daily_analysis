@@ -13,8 +13,8 @@ from js import Object
 from pyodide.ffi import to_js as _to_js
 from workers import Response, WorkerEntrypoint
 
-from src.template_loader import AssetTemplateLoader
-from src.web_report_renderer import normalize_template_name, render_report_html
+from template_loader import AssetTemplateLoader
+from web_report_renderer import normalize_template_name, render_report_html
 
 _REPORT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{10,64}$")
 _DEFAULT_TEMPLATE = "scrapbook"
