@@ -12,7 +12,10 @@
     "run_worker_first": true
   },
   "vars": {
-    "UPLOAD_TOKEN": "change-me"
+    "UPLOAD_TOKEN": "change-me",
+    "TEMPLATE_SOURCE_REPO": "SXP-Simon/astrbot_plugin_qq_group_daily_analysis",
+    "TEMPLATE_SOURCE_REF": "main",
+    "TEMPLATE_SOURCE_PATH": "src/infrastructure/reporting/templates"
   },
   "kv_namespaces": [
     {

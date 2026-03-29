@@ -9,11 +9,21 @@
       },
       "UPLOAD_TOKEN": {
         "description": "Shared secret used by the plugin and Worker."
+      },
+      "TEMPLATE_SOURCE_REPO": {
+        "description": "Template source repo. Default: SXP-Simon/astrbot_plugin_qq_group_daily_analysis"
+      },
+      "TEMPLATE_SOURCE_REF": {
+        "description": "Template source ref. Default: main"
+      },
+      "TEMPLATE_SOURCE_PATH": {
+        "description": "Template source path. Default: src/infrastructure/reporting/templates"
       }
     }
   },
   "scripts": {
-    "deploy": "python3 -m pip install --disable-pip-version-check uv >/dev/null && uv run pywrangler deploy",
-    "dev": "python3 -m pip install --disable-pip-version-check uv >/dev/null && uv run pywrangler dev"
+    "sync-templates": "python3 scripts/sync_templates.py",
+    "deploy": "python3 scripts/sync_templates.py && python3 -m pip install --disable-pip-version-check uv >/dev/null && uv run pywrangler deploy",
+    "dev": "python3 scripts/sync_templates.py && python3 -m pip install --disable-pip-version-check uv >/dev/null && uv run pywrangler dev"
   }
 }

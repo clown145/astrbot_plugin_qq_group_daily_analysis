@@ -18,6 +18,12 @@ from web_report_renderer import normalize_template_name, render_report_html
 
 _REPORT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{10,64}$")
 _DEFAULT_TEMPLATE = "scrapbook"
+_VIEWPORT_TAG_PATTERN = re.compile(
+    r'<meta\s+name=["\']viewport["\'][^>]*>', re.IGNORECASE
+)
+_DESKTOP_VIEWPORT_TAG = (
+    '<meta name="viewport" content="width=1280, viewport-fit=cover">'
+)
 
 
 def to_js(obj):
@@ -111,6 +117,8 @@ class Default(WorkerEntrypoint):
             else:
                 return Response(f"render error: {exc}", status=500)
 
+        rendered_html = self._force_desktop_viewport(rendered_html)
+
         headers = {
             "content-type": "text/html; charset=utf-8",
             "cache-control": "no-store",
@@ -119,6 +127,21 @@ class Default(WorkerEntrypoint):
             "x-content-type-options": "nosniff",
         }
         return Response(rendered_html, headers=headers)
+
+    @staticmethod
+    def _force_desktop_viewport(rendered_html: str) -> str:
+        if _VIEWPORT_TAG_PATTERN.search(rendered_html):
+            return _VIEWPORT_TAG_PATTERN.sub(_DESKTOP_VIEWPORT_TAG, rendered_html, count=1)
+
+        head_close = rendered_html.lower().find("</head>")
+        if head_close != -1:
+            return (
+                rendered_html[:head_close]
+                + f"    {_DESKTOP_VIEWPORT_TAG}\n"
+                + rendered_html[head_close:]
+            )
+
+        return f"{_DESKTOP_VIEWPORT_TAG}\n{rendered_html}"
 
     async def _resolve_template_name(
         self, request, report_payload: dict, template_loader
