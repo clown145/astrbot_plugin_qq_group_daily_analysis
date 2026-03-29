@@ -32,3 +32,7 @@ debug_miku.html
 scripts/output_all/debug_HatsuneMiku_test_group_*.pdf
 scripts/output/mock_report_test_group_mock_*.pdf
 astrbot-lark-group-daily-analysis-main/**
+worker/.venv
+worker/.venv-workers
+worker/python_modules
+worker/uv.lock

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from jinja2 import DictLoader, Environment, select_autoescape
 
-from src.shared.web_report_renderer import normalize_template_name
+from src.web_report_renderer import normalize_template_name
 
 _TEMPLATE_FILES = (
     "image_template.html",

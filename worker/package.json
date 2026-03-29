@@ -13,7 +13,7 @@
     }
   },
   "scripts": {
-    "deploy": "python -m pip install --disable-pip-version-check uv >/dev/null && uv run pywrangler deploy",
-    "dev": "uv run pywrangler dev"
+    "deploy": "python3 -m pip install --disable-pip-version-check uv >/dev/null && uv run pywrangler deploy",
+    "dev": "python3 -m pip install --disable-pip-version-check uv >/dev/null && uv run pywrangler dev"
   }
 }
