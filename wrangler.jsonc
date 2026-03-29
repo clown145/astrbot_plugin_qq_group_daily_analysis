@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "astrbot-daily-report-worker",
-  "main": "src/index.ts",
+  "main": "worker/src/index.ts",
   "compatibility_date": "2026-03-29",
   "kv_namespaces": [
     {
