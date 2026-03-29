@@ -131,7 +131,9 @@ class Default(WorkerEntrypoint):
     @staticmethod
     def _force_desktop_viewport(rendered_html: str) -> str:
         if _VIEWPORT_TAG_PATTERN.search(rendered_html):
-            return _VIEWPORT_TAG_PATTERN.sub(_DESKTOP_VIEWPORT_TAG, rendered_html, count=1)
+            return _VIEWPORT_TAG_PATTERN.sub(
+                _DESKTOP_VIEWPORT_TAG, rendered_html, count=1
+            )
 
         head_close = rendered_html.lower().find("</head>")
         if head_close != -1:
