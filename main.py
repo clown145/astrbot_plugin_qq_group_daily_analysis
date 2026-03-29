@@ -44,6 +44,9 @@ from .src.infrastructure.platform.template_preview import (
 )
 from .src.infrastructure.reporting.generators import ReportGenerator
 from .src.infrastructure.reporting.web_report_publisher import WebReportPublisher
+from .src.infrastructure.reporting.web_report_service import (
+    build_and_publish_web_report,
+)
 from .src.infrastructure.scheduler.auto_scheduler import AutoScheduler
 from .src.infrastructure.scheduler.retry import RetryManager
 from .src.shared.trace_context import TraceContext, TraceLogFilter
@@ -635,12 +638,14 @@ class GroupDailyAnalysis(Star):
                 yield event.plain_result("⚠️ PDF 生成失败。")
 
         elif output_format == "web":
-            payload = await self.report_generator.generate_web_report_payload(
+            publish_result = await build_and_publish_web_report(
+                self.report_generator,
+                self.web_report_publisher,
                 analysis_result,
-                avatar_url_getter=avatar_url_getter,
-                nickname_getter=nickname_getter,
+                adapter,
+                group_id,
+                trace_id=TraceContext.get(),
             )
-            publish_result = await self.web_report_publisher.publish(payload)
             if publish_result:
                 message = f"🔗 每日群聊分析报告：\n{publish_result.url}"
                 if not await adapter.send_text(group_id, message):

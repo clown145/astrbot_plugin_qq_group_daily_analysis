@@ -7,6 +7,7 @@ from typing import Any
 
 from ...shared.trace_context import TraceContext
 from ...utils.logger import logger
+from .web_report_service import build_and_publish_web_report
 
 
 class ReportDispatcher:
@@ -188,34 +189,19 @@ class ReportDispatcher:
             return await self._dispatch_text(group_id, analysis_result, platform_id)
 
         try:
-
-            async def avatar_url_getter(user_id: str):
-                if not platform_id:
-                    return None
-                adapter = self.message_sender.bot_manager.get_adapter(platform_id)
-                if adapter and hasattr(adapter, "get_user_avatar_url"):
-                    return await adapter.get_user_avatar_url(user_id, size=40)
-                return None
-
-            async def nickname_getter(user_id: str):
-                if not platform_id:
-                    return None
-                adapter = self.message_sender.bot_manager.get_adapter(platform_id)
-                if adapter and hasattr(adapter, "get_member_info"):
-                    try:
-                        member = await adapter.get_member_info(group_id, user_id)
-                        if member:
-                            return member.card or member.nickname
-                    except Exception:
-                        return None
-                return None
-
-            payload = await self.report_generator.generate_web_report_payload(
-                analysis_result,
-                avatar_url_getter=avatar_url_getter,
-                nickname_getter=nickname_getter,
+            adapter = (
+                self.message_sender.bot_manager.get_adapter(platform_id)
+                if platform_id
+                else None
             )
-            publish_result = await self.web_report_publisher.publish(payload)
+            publish_result = await build_and_publish_web_report(
+                self.report_generator,
+                self.web_report_publisher,
+                analysis_result,
+                adapter,
+                group_id,
+                trace_id=trace_id,
+            )
             if publish_result:
                 return await self.message_sender.send_text(
                     group_id,
