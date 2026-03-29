@@ -10,11 +10,14 @@
       "UPLOAD_TOKEN": {
         "description": "Shared secret used by the plugin and Worker."
       },
-      "TEMPLATE_SOURCE_REPO": {
-        "description": "Template source repo. Default: SXP-Simon/astrbot_plugin_qq_group_daily_analysis"
+      "WORKER_SOURCE_REPO": {
+        "description": "Worker source repo. Default: SXP-Simon/astrbot_plugin_qq_group_daily_analysis"
       },
-      "TEMPLATE_SOURCE_REF": {
-        "description": "Template source ref. Default: main"
+      "WORKER_SOURCE_REF": {
+        "description": "Worker source ref. Default: main"
+      },
+      "WORKER_SOURCE_PATH": {
+        "description": "Worker runtime path. Default: src/infrastructure/reporting/web_worker_runtime"
       },
       "TEMPLATE_SOURCE_PATH": {
         "description": "Template source path. Default: src/infrastructure/reporting/templates"

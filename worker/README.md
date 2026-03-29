@@ -2,4 +2,4 @@
 
 部署时填好 `UPLOAD_TOKEN`，完成后把同一个值填进插件配置页的“网页日报设置”。
 
-构建时会自动从 `SXP-Simon/astrbot_plugin_qq_group_daily_analysis@main` 拉取模板；如需改来源，可设置 `TEMPLATE_SOURCE_REPO`、`TEMPLATE_SOURCE_REF`、`TEMPLATE_SOURCE_PATH`。
+构建时会自动从 `SXP-Simon/astrbot_plugin_qq_group_daily_analysis@main` 拉取 Worker 运行代码和模板；如需改来源，可设置 `WORKER_SOURCE_REPO`、`WORKER_SOURCE_REF`、`WORKER_SOURCE_PATH`、`TEMPLATE_SOURCE_PATH`。
