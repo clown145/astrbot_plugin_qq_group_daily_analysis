@@ -203,10 +203,16 @@ class ReportDispatcher:
                 trace_id=trace_id,
             )
             if publish_result:
-                return await self.message_sender.send_text(
+                sent = await self.message_sender.send_text(
                     group_id,
                     f"🔗 每日群聊分析报告：\n{publish_result.url}",
                     platform_id,
+                )
+                if sent:
+                    return True
+
+                logger.warning(
+                    f"[{trace_id}] Web report link send failed, falling back to text report."
                 )
         except Exception as exc:
             logger.error(f"[{trace_id}] Failed to dispatch web report: {exc}")
