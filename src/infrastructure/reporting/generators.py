@@ -5,6 +5,7 @@
 
 import asyncio
 import base64
+import html
 import os
 import re
 from datetime import datetime
@@ -65,17 +66,12 @@ class ReportGenerator(IReportGenerator):
         """
         html_content = None
         try:
-            # 准备渲染数据
-            render_payload = await self._prepare_render_data(
+            html_content = await self._render_report_html(
                 analysis_result,
+                template_name="image_template.html",
                 chart_template="activity_chart.html",
                 avatar_url_getter=avatar_url_getter,
                 nickname_getter=nickname_getter,
-            )
-
-            # 先渲染HTML模板（使用 Jinja2 渲染器以支持逻辑标签）
-            html_content = self.html_templates.render_template(
-                "image_template.html", **render_payload
             )
 
             # 检查HTML内容是否有效
@@ -196,10 +192,7 @@ class ReportGenerator(IReportGenerator):
             logger.error(f"生成图片报告过程发生严重错误: {e}", exc_info=True)
             return None, html_content
         finally:
-            # 清理本次运行的 session 和缓存
-            if self._avatar_session:
-                await self._avatar_session.close()
-                self._avatar_session = None
+            await self._cleanup_avatar_session()
 
     async def generate_pdf_report(
         self,
@@ -221,18 +214,12 @@ class ReportGenerator(IReportGenerator):
             )
             pdf_path = output_dir / filename
 
-            # 准备渲染数据
-            render_data = await self._prepare_render_data(
+            html_content = await self._render_report_html(
                 analysis_result,
+                template_name="pdf_template.html",
                 chart_template="activity_chart_pdf.html",
                 avatar_url_getter=avatar_url_getter,
                 nickname_getter=nickname_getter,
-            )
-            logger.info(f"PDF 渲染数据准备完成，包含 {len(render_data)} 个字段")
-
-            # 生成 HTML 内容（使用 Jinja2 渲染器以支持逻辑标签）
-            html_content = self.html_templates.render_template(
-                "pdf_template.html", **render_data
             )
 
             # 检查HTML内容是否有效
@@ -253,6 +240,35 @@ class ReportGenerator(IReportGenerator):
         except Exception as e:
             logger.error(f"生成 PDF 报告失败: {e}")
             return None
+        finally:
+            await self._cleanup_avatar_session()
+
+    async def generate_web_report_html(
+        self,
+        analysis_result: dict,
+        avatar_url_getter=None,
+        nickname_getter=None,
+    ) -> str | None:
+        """生成用于网页分发的 HTML 快照。"""
+        try:
+            html_content = await self._render_report_html(
+                analysis_result,
+                template_name="image_template.html",
+                chart_template="activity_chart.html",
+                avatar_url_getter=avatar_url_getter,
+                nickname_getter=nickname_getter,
+            )
+            if not html_content:
+                logger.error("网页报告 HTML 渲染失败：返回空内容")
+                return None
+
+            logger.info(f"网页报告HTML渲染完成，长度: {len(html_content)} 字符")
+            return html_content
+        except Exception as e:
+            logger.error(f"生成网页报告 HTML 失败: {e}", exc_info=True)
+            return None
+        finally:
+            await self._cleanup_avatar_session()
 
     def generate_text_report(self, analysis_result: dict) -> str:
         """生成文本格式的分析报告"""
@@ -449,6 +465,24 @@ class ReportGenerator(IReportGenerator):
         logger.info(f"渲染数据准备完成，包含 {len(render_data)} 个字段")
         return render_data
 
+    async def _render_report_html(
+        self,
+        analysis_result: dict,
+        template_name: str,
+        chart_template: str,
+        avatar_url_getter=None,
+        nickname_getter=None,
+    ) -> str:
+        """复用现有模板体系渲染最终 HTML。"""
+        render_payload = await self._prepare_render_data(
+            analysis_result,
+            chart_template=chart_template,
+            avatar_url_getter=avatar_url_getter,
+            nickname_getter=nickname_getter,
+        )
+        logger.info(f"HTML 渲染数据准备完成，包含 {len(render_payload)} 个字段")
+        return self.html_templates.render_template(template_name, **render_payload)
+
     async def _render_mentions(
         self,
         text: str,
@@ -459,12 +493,9 @@ class ReportGenerator(IReportGenerator):
         """
         处理文本，将 [123456] 格式的用户引用替换为头像+名称的胶囊样式
         """
-        import re
-
+        if text is None:
+            return ""
         pattern = r"\[(\d+)\]"
-        matches = re.findall(pattern, text)
-        if not matches:
-            return text
 
         async def replacer(match):
             uid = match.group(1)
@@ -506,8 +537,8 @@ class ReportGenerator(IReportGenerator):
 
             return (
                 f'<span class="user-capsule" style="{capsule_style}">'
-                f'<img src="{url}" style="{img_style}">'
-                f'<span style="{name_style}">{name}</span>'
+                f'<img src="{html.escape(url, quote=True)}" style="{img_style}">'
+                f'<span style="{name_style}">{html.escape(str(name))}</span>'
                 f"</span>"
             )
 
@@ -517,16 +548,17 @@ class ReportGenerator(IReportGenerator):
         # 1. 找出所有匹配项
         matches = list(re.finditer(pattern, text))
         if not matches:
-            return text
+            return html.escape(text)
 
-        # 2. 从后往前替换，保持索引正确
-        result = text
-        for match in reversed(matches):
-            replacement = await replacer(match)
+        parts = []
+        last_index = 0
+        for match in matches:
             start, end = match.span()
-            result = result[:start] + replacement + result[end:]
-
-        return result
+            parts.append(html.escape(text[last_index:start]))
+            parts.append(await replacer(match))
+            last_index = end
+        parts.append(html.escape(text[last_index:]))
+        return "".join(parts)
 
     @staticmethod
     def _is_placeholder_display_name(name: str | None, user_id: str) -> bool:
@@ -679,9 +711,7 @@ class ReportGenerator(IReportGenerator):
 
     async def close(self):
         """释放资源，关闭缓存和 session"""
-        if self._avatar_session:
-            await self._avatar_session.close()
-            self._avatar_session = None
+        await self._cleanup_avatar_session()
 
         try:
             if self._avatar_cache:
@@ -689,6 +719,12 @@ class ReportGenerator(IReportGenerator):
                 logger.debug("头像缓存已关闭")
         except Exception as e:
             logger.warning(f"关闭头像缓存失败: {e}")
+
+    async def _cleanup_avatar_session(self):
+        """关闭头像下载会话。"""
+        if self._avatar_session:
+            await self._avatar_session.close()
+            self._avatar_session = None
 
     async def _html_to_pdf(self, html_content: str, output_path: str) -> bool:
         """将 HTML 内容转换为 PDF 文件"""

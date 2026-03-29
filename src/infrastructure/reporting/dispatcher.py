@@ -7,6 +7,7 @@ from typing import Any
 
 from ...shared.trace_context import TraceContext
 from ...utils.logger import logger
+from .web_report_publisher import WebReportPublisher
 
 
 class ReportDispatcher:
@@ -20,6 +21,7 @@ class ReportDispatcher:
         self.report_generator = report_generator
         self.message_sender = message_sender
         self.retry_manager = retry_manager
+        self.web_report_publisher = WebReportPublisher(config_manager)
         self._html_render_func: Callable | None = None
 
     def set_html_render(self, render_func: Callable):
@@ -46,6 +48,8 @@ class ReportDispatcher:
             success = await self._dispatch_image(group_id, analysis_result, platform_id)
         elif output_format == "pdf":
             success = await self._dispatch_pdf(group_id, analysis_result, platform_id)
+        elif output_format == "web":
+            success = await self._dispatch_web(group_id, analysis_result, platform_id)
         else:
             success = await self._dispatch_text(group_id, analysis_result, platform_id)
 
@@ -171,6 +175,51 @@ class ReportDispatcher:
         except Exception as e:
             logger.error(f"[{TraceContext.get()}] Failed to dispatch text report: {e}")
             return False
+
+    async def _dispatch_web(
+        self, group_id: str, analysis_result: dict[str, Any], platform_id: str | None
+    ) -> bool:
+        trace_id = TraceContext.get()
+        if not self.web_report_publisher.is_enabled():
+            logger.warning(f"[{trace_id}] 网页报告功能未启用，回退到文本模式。")
+            return await self._dispatch_text(group_id, analysis_result, platform_id)
+
+        try:
+
+            async def avatar_url_getter(user_id: str):
+                if not platform_id:
+                    return None
+                adapter = self.message_sender.bot_manager.get_adapter(platform_id)
+                if adapter and hasattr(adapter, "get_user_avatar_url"):
+                    return await adapter.get_user_avatar_url(user_id, size=40)
+                return None
+
+            html_content = await self.report_generator.generate_web_report_html(
+                analysis_result,
+                avatar_url_getter=avatar_url_getter,
+            )
+            if not html_content:
+                logger.warning(f"[{trace_id}] 网页报告 HTML 生成失败，回退到文本模式。")
+                return await self._dispatch_text(group_id, analysis_result, platform_id)
+
+            public_url = await self.web_report_publisher.publish_report(
+                html_content,
+                group_id=group_id,
+                platform_id=platform_id,
+                template_name=self.config_manager.get_report_template(),
+            )
+            if not public_url:
+                logger.warning(f"[{trace_id}] 网页报告上传失败，回退到文本模式。")
+                return await self._dispatch_text(group_id, analysis_result, platform_id)
+
+            return await self.message_sender.send_text(
+                group_id,
+                self.web_report_publisher.build_share_message(public_url),
+                platform_id,
+            )
+        except Exception as e:
+            logger.error(f"[{trace_id}] 网页报告分发失败: {e}", exc_info=True)
+            return await self._dispatch_text(group_id, analysis_result, platform_id)
 
     # ================================================================
     # 图片报告上传到群文件 / 群相册（仅 QQ 平台 image 格式）

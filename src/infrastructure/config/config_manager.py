@@ -149,6 +149,30 @@ class ConfigManager:
         """获取输出格式"""
         return self._get_group("basic").get("output_format", "image")
 
+    def get_web_report_enabled(self) -> bool:
+        """获取是否启用网页报告发送。"""
+        return self._get_group("web_report").get("enabled", False)
+
+    def get_web_report_api_base(self) -> str:
+        """获取 Worker API 基础地址。"""
+        return str(self._get_group("web_report").get("worker_api_base", "")).strip()
+
+    def get_web_report_upload_token(self) -> str:
+        """获取网页报告上传令牌。"""
+        return str(self._get_group("web_report").get("upload_token", "")).strip()
+
+    def get_web_report_public_base_url(self) -> str:
+        """获取网页报告公开链接基础地址。"""
+        return str(self._get_group("web_report").get("public_base_url", "")).strip()
+
+    def get_web_report_ttl_days(self) -> int:
+        """获取网页报告保留天数。"""
+        return int(self._get_group("web_report").get("report_ttl_days", 7))
+
+    def get_web_report_timeout_seconds(self) -> int:
+        """获取网页报告上传超时时间。"""
+        return int(self._get_group("web_report").get("request_timeout_seconds", 20))
+
     def get_min_messages_threshold(self) -> int:
         """获取最小消息阈值"""
         return self._get_group("basic").get("min_messages_threshold", 50)

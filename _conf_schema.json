@@ -61,7 +61,7 @@
                 "type": "string",
                 "description": "输出格式",
                 "default": "image",
-                "hint": "分析报告的输出格式：image(图片)、text(文本)、pdf(PDF文件)。使用 PDF 需要额外配置，根据文件中的 PDF_功能说明.md 进行配置"
+                "hint": "分析报告的输出格式：image(图片)、text(文本)、pdf(PDF文件)、web(链接)。其中 web 需要额外启用 web_report 配置组；PDF 需要额外配置，根据文件中的 PDF_功能说明.md 进行配置"
             },
             "report_template": {
                 "type": "string",
@@ -358,6 +358,49 @@
                 "description": "PDF文件名格式",
                 "default": "群聊分析报告_{group_id}_{date}.pdf",
                 "hint": "PDF文件名格式，支持变量：{group_id}(群号)、{date}(日期)"
+            }
+        }
+    },
+    "web_report": {
+        "description": "网页报告设置",
+        "type": "object",
+        "hint": "将当前报告模板渲染出的 HTML 上传到 Cloudflare Worker，并在群内发送公开链接。默认关闭，只有在 output_format=web 且本组配置完整时才会生效。",
+        "items": {
+            "enabled": {
+                "type": "bool",
+                "description": "启用网页报告发送",
+                "default": false,
+                "hint": "总开关。关闭时，即使输出格式被切到 web，也会自动回退到文本报告。"
+            },
+            "worker_api_base": {
+                "type": "string",
+                "description": "Worker API 地址",
+                "default": "",
+                "hint": "Cloudflare Worker 的基础地址，例如 https://daily-report.example.workers.dev"
+            },
+            "upload_token": {
+                "type": "string",
+                "description": "Worker 上传令牌",
+                "default": "",
+                "hint": "用于调用 /api/internal/reports 的 Bearer Token。请与 Worker 端的 UPLOAD_TOKEN 保持一致。"
+            },
+            "public_base_url": {
+                "type": "string",
+                "description": "公开链接基础地址",
+                "default": "",
+                "hint": "可选。留空时默认使用 worker_api_base；如果你给 Worker 绑定了自定义域名，建议在这里填写最终访问域名。"
+            },
+            "report_ttl_days": {
+                "type": "int",
+                "description": "报告保留天数",
+                "default": 7,
+                "hint": "每份网页报告在 KV 中保留多少天。到期后链接会失效。"
+            },
+            "request_timeout_seconds": {
+                "type": "int",
+                "description": "上传超时时间（秒）",
+                "default": 20,
+                "hint": "插件上传 HTML 到 Worker 的总超时时间。"
             }
         }
     },

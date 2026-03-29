@@ -43,6 +43,7 @@ from .src.infrastructure.platform.template_preview import (
     TemplatePreviewRouter,
 )
 from .src.infrastructure.reporting.generators import ReportGenerator
+from .src.infrastructure.reporting.web_report_publisher import WebReportPublisher
 from .src.infrastructure.scheduler.auto_scheduler import AutoScheduler
 from .src.infrastructure.scheduler.retry import RetryManager
 from .src.shared.trace_context import TraceContext, TraceLogFilter
@@ -72,6 +73,7 @@ class GroupDailyAnalysis(Star):
     template_preview_router: TemplatePreviewRouter
     retry_manager: RetryManager
     auto_scheduler: AutoScheduler
+    web_report_publisher: WebReportPublisher
 
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -128,6 +130,7 @@ class GroupDailyAnalysis(Star):
         self.template_preview_router = TemplatePreviewRouter(
             handlers=[self.telegram_template_preview_handler]
         )
+        self.web_report_publisher = WebReportPublisher(self.config_manager)
 
         # 调度与重试
         self.retry_manager = RetryManager(
@@ -630,6 +633,46 @@ class GroupDailyAnalysis(Star):
             else:
                 yield event.plain_result("⚠️ PDF 生成失败。")
 
+        elif output_format == "web":
+            missing = self.web_report_publisher.get_missing_requirements()
+            if missing:
+                text_report = self.report_generator.generate_text_report(
+                    analysis_result
+                )
+                yield event.plain_result(
+                    "⚠️ 网页报告未启用或配置不完整，已回退到文本报告。\n"
+                    f"缺少配置: {', '.join(missing)}\n\n{text_report}"
+                )
+                return
+
+            html_content = await self.report_generator.generate_web_report_html(
+                analysis_result,
+                avatar_url_getter=avatar_url_getter,
+                nickname_getter=nickname_getter,
+            )
+            if not html_content:
+                text_report = self.report_generator.generate_text_report(
+                    analysis_result
+                )
+                yield event.plain_result(
+                    f"⚠️ 网页报告生成失败，回退文本：\n\n{text_report}"
+                )
+                return
+
+            public_url = await self.web_report_publisher.publish_report(
+                html_content,
+                group_id=group_id,
+                platform_id=platform_id,
+                template_name=self.config_manager.get_report_template(),
+            )
+            if public_url and await adapter.send_text(
+                group_id, self.web_report_publisher.build_share_message(public_url)
+            ):
+                return
+
+            text_report = self.report_generator.generate_text_report(analysis_result)
+            yield event.plain_result(f"⚠️ 网页报告发送失败，回退文本：\n\n{text_report}")
+
         else:
             text_report = self.report_generator.generate_text_report(analysis_result)
             if not await adapter.send_text(group_id, text_report):
@@ -640,7 +683,7 @@ class GroupDailyAnalysis(Star):
     async def set_output_format(self, event: AstrMessageEvent, format_type: str = ""):
         """
         设置分析报告输出格式（跨平台支持）
-        用法: /设置格式 [image|text|pdf]
+        用法: /设置格式 [image|text|pdf|web]
         """
         group_id = self._get_group_id_from_event(event)
 
@@ -655,24 +698,39 @@ class GroupDailyAnalysis(Star):
                 if self.config_manager.playwright_available
                 else "❌ (需安装 Playwright)"
             )
+            web_status = (
+                "✅"
+                if self.web_report_publisher.is_enabled()
+                else "❌ (需启用 web_report 并填写 Worker 配置)"
+            )
             yield event.plain_result(f"""📊 当前输出格式: {current_format}
 
 可用格式:
 • image - 图片格式 (默认)
 • text - 文本格式
 • pdf - PDF 格式 {pdf_status}
+• web - 网页链接 {web_status}
 
 用法: /设置格式 [格式名称]""")
             return
 
         format_type = format_type.lower()
-        if format_type not in ["image", "text", "pdf"]:
-            yield event.plain_result("❌ 无效的格式类型，支持: image, text, pdf")
+        if format_type not in ["image", "text", "pdf", "web"]:
+            yield event.plain_result("❌ 无效的格式类型，支持: image, text, pdf, web")
             return
 
         if format_type == "pdf" and not self.config_manager.playwright_available:
             yield event.plain_result("❌ PDF 格式不可用，请使用 /安装PDF 命令安装依赖")
             return
+
+        if format_type == "web":
+            missing = self.web_report_publisher.get_missing_requirements()
+            if missing:
+                yield event.plain_result(
+                    "❌ 网页链接格式未启用或配置不完整。\n"
+                    f"缺少配置: {', '.join(missing)}"
+                )
+                return
 
         self.config_manager.set_output_format(format_type)
         yield event.plain_result(f"✅ 输出格式已设置为: {format_type}")
@@ -901,11 +959,12 @@ class GroupDailyAnalysis(Star):
 • 增量分析: {incremental_status_text}
 • 调试模式: {debug_status} (增量立即报告)
 • 输出格式: {output_format}
+• 网页报告: {"已启用" if self.web_report_publisher.is_enabled() else "未启用"}
 • PDF 功能: {pdf_status}
 • 最小消息数: {min_threshold}
 
 💡 可用命令: enable, disable, status, reload, test, incremental_debug
-💡 支持的输出格式: image, text, pdf (图片和PDF包含活跃度可视化)
+💡 支持的输出格式: image, text, pdf, web (web 为发送链接，需额外配置 Worker)
 💡 其他命令: /设置格式, /安装PDF, /增量状态""")
 
     @filter.command("增量状态", alias={"incremental_status"})

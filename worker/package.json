@@ -1,0 +1,29 @@
+{
+  "name": "astrbot-daily-report-worker",
+  "private": true,
+  "version": "0.1.0",
+  "cloudflare": {
+    "bindings": {
+      "REPORTS": {
+        "description": "KV Namespace used to store generated HTML reports and lightweight metadata."
+      },
+      "UPLOAD_TOKEN": {
+        "description": "A shared secret used by the AstrBot plugin. Generate one with `openssl rand -hex 32` and use the same value in `web_report.upload_token`."
+      },
+      "PUBLIC_BASE_URL": {
+        "description": "Optional custom domain for report links, for example `https://report.example.com`."
+      },
+      "DEFAULT_TTL_SECONDS": {
+        "description": "Default retention time for reports in seconds. The plugin can override this per upload."
+      }
+    }
+  },
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "check": "wrangler deploy --dry-run"
+  },
+  "devDependencies": {
+    "wrangler": "^4.9.0"
+  }
+}
