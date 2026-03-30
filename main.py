@@ -42,6 +42,10 @@ from .src.infrastructure.platform.template_preview import (
     TelegramTemplatePreviewHandler,
     TemplatePreviewRouter,
 )
+from .src.infrastructure.platform.web_report import (
+    TelegramWebReportHandler,
+    WebReportRouter,
+)
 from .src.infrastructure.reporting.generators import ReportGenerator
 from .src.infrastructure.reporting.web_report_publisher import WebReportPublisher
 from .src.infrastructure.reporting.web_report_service import (
@@ -75,6 +79,8 @@ class GroupDailyAnalysis(Star):
     template_command_service: TemplateCommandService
     telegram_template_preview_handler: TelegramTemplatePreviewHandler
     template_preview_router: TemplatePreviewRouter
+    telegram_web_report_handler: TelegramWebReportHandler
+    web_report_router: WebReportRouter
     retry_manager: RetryManager
     auto_scheduler: AutoScheduler
 
@@ -134,6 +140,13 @@ class GroupDailyAnalysis(Star):
         self.template_preview_router = TemplatePreviewRouter(
             handlers=[self.telegram_template_preview_handler]
         )
+        self.telegram_web_report_handler = TelegramWebReportHandler(
+            config_manager=self.config_manager,
+            template_service=self.template_command_service,
+        )
+        self.web_report_router = WebReportRouter(
+            handlers=[self.telegram_web_report_handler]
+        )
 
         # 调度与重试
         self.retry_manager = RetryManager(
@@ -146,6 +159,7 @@ class GroupDailyAnalysis(Star):
             self.retry_manager,
             self.report_generator,
             self.web_report_publisher,
+            self.web_report_router,
             self.html_render,
             plugin_instance=self,
         )
@@ -213,6 +227,10 @@ class GroupDailyAnalysis(Star):
                     await self.template_preview_router.ensure_handlers_registered(
                         self.context
                     )
+                if self.web_report_router:
+                    await self.web_report_router.ensure_handlers_registered(
+                        self.context
+                    )
 
                 # 3. 强制注册定时分析任务
                 if self.auto_scheduler:
@@ -262,6 +280,8 @@ class GroupDailyAnalysis(Star):
 
             if self.template_preview_router:
                 await self.template_preview_router.unregister_handlers()
+            if self.web_report_router:
+                await self.web_report_router.unregister_handlers()
 
             if self.report_generator:
                 await self.report_generator.close()
@@ -647,9 +667,20 @@ class GroupDailyAnalysis(Star):
                 trace_id=TraceContext.get(),
             )
             if publish_result:
-                message = f"🔗 每日群聊分析报告：\n{publish_result.url}"
-                if not await adapter.send_text(group_id, message):
-                    yield event.plain_result(message)
+                handled = False
+                if self.web_report_router:
+                    handled = await self.web_report_router.send_web_report(
+                        event=event,
+                        adapter=adapter,
+                        platform_id=platform_id,
+                        group_id=group_id,
+                        report_url=publish_result.url,
+                    )
+
+                if not handled:
+                    message = f"🔗 每日群聊分析报告：\n{publish_result.url}"
+                    if not await adapter.send_text(group_id, message):
+                        yield event.plain_result(message)
             else:
                 text_report = self.report_generator.generate_text_report(
                     analysis_result

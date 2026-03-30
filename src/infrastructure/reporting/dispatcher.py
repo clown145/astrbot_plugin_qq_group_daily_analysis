@@ -23,6 +23,7 @@ class ReportDispatcher:
         self.retry_manager = retry_manager
         self._html_render_func: Callable | None = None
         self.web_report_publisher = None
+        self.web_report_router = None
 
     def set_html_render(self, render_func: Callable):
         """设置 HTML 渲染函数 (运行时注入)"""
@@ -31,6 +32,10 @@ class ReportDispatcher:
     def set_web_report_publisher(self, publisher):
         """设置网页日报发布器。"""
         self.web_report_publisher = publisher
+
+    def set_web_report_router(self, router):
+        """设置网页日报平台路由。"""
+        self.web_report_router = router
 
     async def dispatch(
         self,
@@ -203,6 +208,17 @@ class ReportDispatcher:
                 trace_id=trace_id,
             )
             if publish_result:
+                if self.web_report_router:
+                    handled = await self.web_report_router.send_web_report(
+                        event=None,
+                        adapter=adapter,
+                        platform_id=platform_id,
+                        group_id=group_id,
+                        report_url=publish_result.url,
+                    )
+                    if handled:
+                        return True
+
                 sent = await self.message_sender.send_text(
                     group_id,
                     f"🔗 每日群聊分析报告：\n{publish_result.url}",
