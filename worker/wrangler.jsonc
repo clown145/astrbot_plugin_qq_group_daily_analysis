@@ -9,7 +9,11 @@
   "assets": {
     "directory": "./templates",
     "binding": "ASSETS",
-    "run_worker_first": true
+    "run_worker_first": [
+      "/api/*",
+      "/r/*",
+      "/healthz"
+    ]
   },
   "vars": {
     "UPLOAD_TOKEN": "change-me",

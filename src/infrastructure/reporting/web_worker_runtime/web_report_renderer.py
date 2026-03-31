@@ -34,14 +34,19 @@ def normalize_template_name(template_name: str | None) -> str | None:
 def render_report_html(
     env: Environment,
     report_payload: dict[str, Any],
-    document_template: str = "image_template.html",
+    document_template: str = "html_template.html",
     chart_template: str = "activity_chart.html",
 ) -> str:
     """根据结构化 payload 渲染完整 HTML。"""
     render_context = build_render_context(
         env, report_payload, chart_template=chart_template
     )
-    return env.get_template(document_template).render(**render_context)
+    try:
+        return env.get_template(document_template).render(**render_context)
+    except Exception:
+        if document_template != "image_template.html":
+            return env.get_template("image_template.html").render(**render_context)
+        raise
 
 
 def build_render_context(

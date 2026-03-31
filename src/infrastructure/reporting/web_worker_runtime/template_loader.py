@@ -8,7 +8,7 @@ from jinja2 import DictLoader, Environment, select_autoescape
 
 from web_report_renderer import normalize_template_name
 
-_TEMPLATE_FILES = (
+_REQUIRED_TEMPLATE_FILES = (
     "image_template.html",
     "topic_item.html",
     "user_title_item.html",
@@ -16,6 +16,7 @@ _TEMPLATE_FILES = (
     "chat_quality_item.html",
     "activity_chart.html",
 )
+_OPTIONAL_TEMPLATE_FILES = ("html_template.html",)
 _ENV_CACHE: dict[str, Environment] = {}
 
 
@@ -43,7 +44,7 @@ class AssetTemplateLoader:
             return cached
 
         template_sources: dict[str, str] = {}
-        for template_file in _TEMPLATE_FILES:
+        for template_file in _REQUIRED_TEMPLATE_FILES:
             response = await self.assets_binding.fetch(
                 f"https://assets.local/{normalized}/{template_file}"
             )
@@ -52,6 +53,13 @@ class AssetTemplateLoader:
                     f"missing template asset: {normalized}/{template_file}"
                 )
             template_sources[template_file] = await response.text()
+
+        for template_file in _OPTIONAL_TEMPLATE_FILES:
+            response = await self.assets_binding.fetch(
+                f"https://assets.local/{normalized}/{template_file}"
+            )
+            if response.status == 200:
+                template_sources[template_file] = await response.text()
 
         env = Environment(
             loader=DictLoader(template_sources),
