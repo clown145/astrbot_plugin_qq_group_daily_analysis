@@ -16,8 +16,7 @@ _REQUIRED_TEMPLATE_FILES = (
     "chat_quality_item.html",
     "activity_chart.html",
 )
-_OPTIONAL_TEMPLATE_FILES = ("html_template.html",)
-_TEMPLATE_SOURCE_CACHE: dict[str, dict[str, str]] = {}
+_ENV_CACHE: dict[str, Environment] = {}
 
 
 class AssetTemplateLoader:
@@ -39,16 +38,7 @@ class AssetTemplateLoader:
         if not normalized:
             raise ValueError("invalid template name")
 
-        env = Environment(
-            loader=DictLoader(await self._get_template_sources(normalized)),
-            autoescape=select_autoescape(["html", "xml"]),
-            trim_blocks=True,
-            lstrip_blocks=True,
-        )
-        return env
-
-    async def _get_template_sources(self, normalized: str) -> dict[str, str]:
-        cached = _TEMPLATE_SOURCE_CACHE.get(normalized)
+        cached = _ENV_CACHE.get(normalized)
         if cached is not None:
             return cached
 
@@ -63,12 +53,11 @@ class AssetTemplateLoader:
                 )
             template_sources[template_file] = await response.text()
 
-        for template_file in _OPTIONAL_TEMPLATE_FILES:
-            response = await self.assets_binding.fetch(
-                f"https://assets.local/{normalized}/{template_file}"
-            )
-            if response.status == 200:
-                template_sources[template_file] = await response.text()
-
-        _TEMPLATE_SOURCE_CACHE[normalized] = template_sources
-        return template_sources
+        env = Environment(
+            loader=DictLoader(template_sources),
+            autoescape=select_autoescape(["html", "xml"]),
+            trim_blocks=True,
+            lstrip_blocks=True,
+        )
+        _ENV_CACHE[normalized] = env
+        return env
