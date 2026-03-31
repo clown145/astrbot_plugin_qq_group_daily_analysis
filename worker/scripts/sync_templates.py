@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import io
 import os
+import subprocess
 import shutil
 import tarfile
 import urllib.request
@@ -12,6 +13,42 @@ DEFAULT_REPO = "SXP-Simon/astrbot_plugin_qq_group_daily_analysis"
 DEFAULT_REF = "main"
 DEFAULT_RUNTIME_SOURCE_PATH = "src/infrastructure/reporting/web_worker_runtime"
 DEFAULT_TEMPLATE_SOURCE_PATH = "src/infrastructure/reporting/templates"
+
+
+def _run_git(*args: str) -> str | None:
+    try:
+        completed = subprocess.run(
+            ["git", *args],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except Exception:
+        return None
+    output = completed.stdout.strip()
+    return output or None
+
+
+def _detect_repo_from_origin() -> str | None:
+    origin_url = _run_git("config", "--get", "remote.origin.url")
+    if not origin_url:
+        return None
+
+    if origin_url.startswith("git@github.com:"):
+        slug = origin_url.removeprefix("git@github.com:")
+    elif "github.com/" in origin_url:
+        slug = origin_url.split("github.com/", 1)[1]
+    else:
+        return None
+
+    slug = slug.removesuffix(".git").strip("/")
+    if slug.count("/") != 1:
+        return None
+    return slug
+
+
+def _detect_ref_from_head() -> str | None:
+    return _run_git("rev-parse", "HEAD")
 
 
 def _download_archive(repo: str, ref: str) -> bytes:
@@ -60,15 +97,34 @@ def _extract_directory(
     return extracted_count
 
 
+def _extract_all(
+    archive_data: bytes,
+    runtime_source_path: str,
+    template_source_path: str,
+    target_runtime_dir: Path,
+    target_template_dir: Path,
+) -> tuple[int, int]:
+    with tarfile.open(fileobj=io.BytesIO(archive_data), mode="r:gz") as archive:
+        extracted_runtime = _extract_directory(
+            archive, runtime_source_path, target_runtime_dir
+        )
+        extracted_templates = _extract_directory(
+            archive, template_source_path, target_template_dir
+        )
+    return extracted_runtime, extracted_templates
+
+
 def main() -> int:
     repo = (
         os.environ.get("WORKER_SOURCE_REPO")
         or os.environ.get("TEMPLATE_SOURCE_REPO")
+        or _detect_repo_from_origin()
         or DEFAULT_REPO
     ).strip()
     ref = (
         os.environ.get("WORKER_SOURCE_REF")
         or os.environ.get("TEMPLATE_SOURCE_REF")
+        or _detect_ref_from_head()
         or DEFAULT_REF
     ).strip()
     runtime_source_path = os.environ.get(
@@ -91,15 +147,13 @@ def main() -> int:
     target_runtime_dir = root_dir / "src"
     target_template_dir = root_dir / "templates"
     archive_data = _download_archive(repo, ref)
-
-    with tarfile.open(fileobj=io.BytesIO(archive_data), mode="r:gz") as archive:
-        extracted_runtime = _extract_directory(
-            archive, runtime_source_path, target_runtime_dir
-        )
-    with tarfile.open(fileobj=io.BytesIO(archive_data), mode="r:gz") as archive:
-        extracted_templates = _extract_directory(
-            archive, template_source_path, target_template_dir
-        )
+    extracted_runtime, extracted_templates = _extract_all(
+        archive_data,
+        runtime_source_path,
+        template_source_path,
+        target_runtime_dir,
+        target_template_dir,
+    )
 
     if extracted_runtime == 0:
         raise SystemExit(

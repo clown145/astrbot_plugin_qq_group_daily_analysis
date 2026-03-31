@@ -11,10 +11,10 @@
         "description": "Shared secret used by the plugin and Worker."
       },
       "WORKER_SOURCE_REPO": {
-        "description": "Worker source repo. Default: SXP-Simon/astrbot_plugin_qq_group_daily_analysis"
+        "description": "Optional override for the GitHub repo slug to sync from. Default: detect current origin repo."
       },
       "WORKER_SOURCE_REF": {
-        "description": "Worker source ref. Default: main"
+        "description": "Optional override for the git ref to sync from. Default: current HEAD commit."
       },
       "WORKER_SOURCE_PATH": {
         "description": "Worker runtime path. Default: src/infrastructure/reporting/web_worker_runtime"

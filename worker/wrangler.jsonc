@@ -13,8 +13,6 @@
   },
   "vars": {
     "UPLOAD_TOKEN": "change-me",
-    "WORKER_SOURCE_REPO": "SXP-Simon/astrbot_plugin_qq_group_daily_analysis",
-    "WORKER_SOURCE_REF": "main",
     "WORKER_SOURCE_PATH": "src/infrastructure/reporting/web_worker_runtime",
     "TEMPLATE_SOURCE_PATH": "src/infrastructure/reporting/templates"
   },
