@@ -24,6 +24,8 @@ _VIEWPORT_TAG_PATTERN = re.compile(
 _DESKTOP_VIEWPORT_TAG = (
     '<meta name="viewport" content="width=1280, viewport-fit=cover">'
 )
+_RENDERED_HTML_CACHE: dict[str, str] = {}
+_RENDERED_HTML_CACHE_LIMIT = 128
 
 
 def to_js(obj):
@@ -103,6 +105,10 @@ class Default(WorkerEntrypoint):
         template_name = await self._resolve_template_name(
             request, report_payload, template_loader
         )
+        cache_key = f"{report_id}:{template_name}"
+        cached_html = _RENDERED_HTML_CACHE.get(cache_key)
+        if cached_html is not None:
+            return Response(cached_html, headers=self._html_headers())
 
         try:
             env = await template_loader.get_environment(template_name)
@@ -118,15 +124,8 @@ class Default(WorkerEntrypoint):
                 return Response(f"render error: {exc}", status=500)
 
         rendered_html = self._force_desktop_viewport(rendered_html)
-
-        headers = {
-            "content-type": "text/html; charset=utf-8",
-            "cache-control": "no-store",
-            "x-robots-tag": "noindex, nofollow, noarchive",
-            "referrer-policy": "no-referrer",
-            "x-content-type-options": "nosniff",
-        }
-        return Response(rendered_html, headers=headers)
+        self._cache_rendered_html(cache_key, rendered_html)
+        return Response(rendered_html, headers=self._html_headers())
 
     @staticmethod
     def _force_desktop_viewport(rendered_html: str) -> str:
@@ -171,6 +170,28 @@ class Default(WorkerEntrypoint):
     def _origin_for(request) -> str:
         parsed = urlparse(request.url)
         return f"{parsed.scheme}://{parsed.netloc}"
+
+    @staticmethod
+    def _cache_rendered_html(cache_key: str, rendered_html: str) -> None:
+        if cache_key in _RENDERED_HTML_CACHE:
+            _RENDERED_HTML_CACHE[cache_key] = rendered_html
+            return
+
+        if len(_RENDERED_HTML_CACHE) >= _RENDERED_HTML_CACHE_LIMIT:
+            oldest_key = next(iter(_RENDERED_HTML_CACHE))
+            _RENDERED_HTML_CACHE.pop(oldest_key, None)
+
+        _RENDERED_HTML_CACHE[cache_key] = rendered_html
+
+    @staticmethod
+    def _html_headers() -> dict[str, str]:
+        return {
+            "content-type": "text/html; charset=utf-8",
+            "cache-control": "no-store",
+            "x-robots-tag": "noindex, nofollow, noarchive",
+            "referrer-policy": "no-referrer",
+            "x-content-type-options": "nosniff",
+        }
 
     @staticmethod
     def _json_response(payload: dict, status: int = 200) -> Response:
