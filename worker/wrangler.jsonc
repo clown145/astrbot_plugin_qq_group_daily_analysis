@@ -13,6 +13,8 @@
   },
   "vars": {
     "UPLOAD_TOKEN": "change-me",
+    "WORKER_SOURCE_REPO": "",
+    "WORKER_SOURCE_REF": "",
     "WORKER_SOURCE_PATH": "src/infrastructure/reporting/web_worker_runtime",
     "TEMPLATE_SOURCE_PATH": "src/infrastructure/reporting/templates"
   },
