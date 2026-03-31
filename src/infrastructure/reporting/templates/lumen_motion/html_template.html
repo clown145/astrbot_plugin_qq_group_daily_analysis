@@ -5,6 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lumen Motion · {{ current_date }}</title>
+    <script>
+        document.documentElement.classList.add("lm-pending");
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
@@ -78,6 +81,10 @@
             padding: 28px;
         }
 
+        html.lm-pending body {
+            overflow: hidden;
+        }
+
         .lm-shell {
             max-width: 1160px;
             margin: 0 auto;
@@ -87,6 +94,17 @@
             border: 1px solid var(--lm-line);
             box-shadow: var(--lm-shadow);
             backdrop-filter: blur(18px);
+        }
+
+        html.lm-pending .lm-shell {
+            opacity: 0;
+            transform: translateY(28px) scale(0.985);
+        }
+
+        html.lm-ready .lm-shell {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            transition: opacity 560ms ease, transform 720ms cubic-bezier(0.22, 1, 0.36, 1);
         }
 
         .lm-hero {
@@ -610,10 +628,15 @@
 
         .lm-motion .lm-stage,
         .lm-motion .lm-metric-card,
-        .lm-motion .lm-spotlight {
+        .lm-motion .lm-spotlight,
+        .lm-motion .lm-topic-card,
+        .lm-motion .lm-title-card,
+        .lm-motion .lm-quote-card,
+        .lm-motion .lm-quality-card,
+        .lm-motion .lm-footer-card {
             opacity: 0;
-            transform: translateY(20px);
-            transition: opacity 640ms ease, transform 640ms ease;
+            transform: translateY(26px);
+            transition: opacity 680ms ease, transform 680ms cubic-bezier(0.22, 1, 0.36, 1);
         }
 
         .lm-motion .lm-stage { transition-delay: var(--lm-delay, 0ms); }
@@ -622,14 +645,33 @@
         .lm-motion .lm-metric-card:nth-child(3) { transition-delay: 160ms; }
         .lm-motion .lm-metric-card:nth-child(4) { transition-delay: 210ms; }
         .lm-motion .lm-spotlight { transition-delay: 180ms; }
+        .lm-motion .lm-topic-card:nth-child(1),
+        .lm-motion .lm-title-card:nth-child(1),
+        .lm-motion .lm-quote-card:nth-child(1) { transition-delay: 60ms; }
+        .lm-motion .lm-topic-card:nth-child(2),
+        .lm-motion .lm-title-card:nth-child(2),
+        .lm-motion .lm-quote-card:nth-child(2) { transition-delay: 120ms; }
+        .lm-motion .lm-topic-card:nth-child(3),
+        .lm-motion .lm-title-card:nth-child(3),
+        .lm-motion .lm-quote-card:nth-child(3) { transition-delay: 180ms; }
+        .lm-motion .lm-topic-card:nth-child(4),
+        .lm-motion .lm-title-card:nth-child(4),
+        .lm-motion .lm-quote-card:nth-child(4) { transition-delay: 240ms; }
+        .lm-motion .lm-footer-card { transition-delay: 320ms; }
 
+        html.lm-pending .lm-motion .lm-chart-bar,
         .lm-motion:not(.lm-ready) .lm-chart-bar {
             height: 0 !important;
         }
 
-        .lm-motion.lm-ready .lm-stage,
-        .lm-motion.lm-ready .lm-metric-card,
-        .lm-motion.lm-ready .lm-spotlight {
+        html.lm-ready .lm-motion .lm-stage,
+        html.lm-ready .lm-motion .lm-metric-card,
+        html.lm-ready .lm-motion .lm-spotlight,
+        html.lm-ready .lm-motion .lm-topic-card,
+        html.lm-ready .lm-motion .lm-title-card,
+        html.lm-ready .lm-motion .lm-quote-card,
+        html.lm-ready .lm-motion .lm-quality-card,
+        html.lm-ready .lm-motion .lm-footer-card {
             opacity: 1;
             transform: translateY(0);
         }
@@ -779,12 +821,12 @@
     </div>
 
     <script>
-        window.addEventListener("DOMContentLoaded", () => {
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    document.body.classList.add("lm-ready");
-                });
-            });
+        window.addEventListener("load", () => {
+            window.setTimeout(() => {
+                document.documentElement.classList.remove("lm-pending");
+                document.documentElement.classList.add("lm-ready");
+                document.body.classList.add("lm-ready");
+            }, 140);
         });
     </script>
 </body>
