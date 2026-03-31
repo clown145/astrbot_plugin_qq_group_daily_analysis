@@ -17,7 +17,7 @@ _REQUIRED_TEMPLATE_FILES = (
     "activity_chart.html",
 )
 _OPTIONAL_TEMPLATE_FILES = ("html_template.html",)
-_ENV_CACHE: dict[str, Environment] = {}
+_TEMPLATE_SOURCE_CACHE: dict[str, dict[str, str]] = {}
 
 
 class AssetTemplateLoader:
@@ -39,7 +39,16 @@ class AssetTemplateLoader:
         if not normalized:
             raise ValueError("invalid template name")
 
-        cached = _ENV_CACHE.get(normalized)
+        env = Environment(
+            loader=DictLoader(await self._get_template_sources(normalized)),
+            autoescape=select_autoescape(["html", "xml"]),
+            trim_blocks=True,
+            lstrip_blocks=True,
+        )
+        return env
+
+    async def _get_template_sources(self, normalized: str) -> dict[str, str]:
+        cached = _TEMPLATE_SOURCE_CACHE.get(normalized)
         if cached is not None:
             return cached
 
@@ -61,11 +70,5 @@ class AssetTemplateLoader:
             if response.status == 200:
                 template_sources[template_file] = await response.text()
 
-        env = Environment(
-            loader=DictLoader(template_sources),
-            autoescape=select_autoescape(["html", "xml"]),
-            trim_blocks=True,
-            lstrip_blocks=True,
-        )
-        _ENV_CACHE[normalized] = env
-        return env
+        _TEMPLATE_SOURCE_CACHE[normalized] = template_sources
+        return template_sources
