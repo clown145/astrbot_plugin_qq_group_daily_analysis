@@ -2,4 +2,4 @@
 
 部署时填好 `UPLOAD_TOKEN`，完成后把同一个值填进插件配置页的“网页日报设置”。
 
-构建时默认会从当前部署仓库的 `origin` 和当前 `HEAD` commit 拉取 Worker 运行代码和模板；部署页里如果把 `WORKER_SOURCE_REPO`、`WORKER_SOURCE_REF` 留空，就会走这个自动检测。需要手动改来源时，再填写 `WORKER_SOURCE_REPO`、`WORKER_SOURCE_REF`、`WORKER_SOURCE_PATH`、`TEMPLATE_SOURCE_PATH`。
+构建时会优先尝试当前 GitHub 账号下的插件仓库 `astrbot_plugin_qq_group_daily_analysis@main`，找不到再回退到上游；部署页里如果填写了 `WORKER_SOURCE_REPO`、`WORKER_SOURCE_REF`，则优先按你填写的来源拉取。需要更细控制时，再填写 `WORKER_SOURCE_PATH`、`TEMPLATE_SOURCE_PATH`。

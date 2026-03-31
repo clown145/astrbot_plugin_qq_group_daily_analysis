@@ -11,6 +11,7 @@ from pathlib import Path
 
 DEFAULT_REPO = "SXP-Simon/astrbot_plugin_qq_group_daily_analysis"
 DEFAULT_REF = "main"
+DEFAULT_PLUGIN_REPO_NAME = "astrbot_plugin_qq_group_daily_analysis"
 DEFAULT_RUNTIME_SOURCE_PATH = "src/infrastructure/reporting/web_worker_runtime"
 DEFAULT_TEMPLATE_SOURCE_PATH = "src/infrastructure/reporting/templates"
 
@@ -49,6 +50,13 @@ def _detect_repo_from_origin() -> str | None:
 
 def _detect_ref_from_head() -> str | None:
     return _run_git("rev-parse", "HEAD")
+
+
+def _split_repo_slug(repo: str | None) -> tuple[str | None, str | None]:
+    if not repo or "/" not in repo:
+        return None, None
+    owner, name = repo.split("/", 1)
+    return owner, name
 
 
 def _download_archive(repo: str, ref: str) -> bytes:
@@ -110,34 +118,56 @@ def _extract_all(
         )
         extracted_templates = _extract_directory(
             archive, template_source_path, target_template_dir
-        )
+    )
     return extracted_runtime, extracted_templates
 
 
-def main() -> int:
-    repo = (
+def _resolve_source_candidates() -> list[tuple[str, str]]:
+    explicit_repo = (
         os.environ.get("WORKER_SOURCE_REPO")
         or os.environ.get("TEMPLATE_SOURCE_REPO")
-        or _detect_repo_from_origin()
-        or DEFAULT_REPO
+        or ""
     ).strip()
-    ref = (
+    explicit_ref = (
         os.environ.get("WORKER_SOURCE_REF")
         or os.environ.get("TEMPLATE_SOURCE_REF")
-        or _detect_ref_from_head()
-        or DEFAULT_REF
+        or ""
     ).strip()
+
+    current_repo = _detect_repo_from_origin()
+    current_head = _detect_ref_from_head()
+    owner, current_repo_name = _split_repo_slug(current_repo)
+
+    candidates: list[tuple[str, str]] = []
+
+    def add(repo: str | None, ref: str | None) -> None:
+        if not repo or "/" not in repo or not ref:
+            return
+        pair = (repo, ref)
+        if pair not in candidates:
+            candidates.append(pair)
+
+    if explicit_repo:
+        add(explicit_repo, explicit_ref or DEFAULT_REF)
+
+    if current_repo and current_repo_name == DEFAULT_PLUGIN_REPO_NAME:
+        add(current_repo, current_head or DEFAULT_REF)
+        add(current_repo, DEFAULT_REF)
+    elif owner:
+        add(f"{owner}/{DEFAULT_PLUGIN_REPO_NAME}", explicit_ref or DEFAULT_REF)
+
+    add(DEFAULT_REPO, explicit_ref or DEFAULT_REF)
+
+    return candidates
+
+
+def main() -> int:
     runtime_source_path = os.environ.get(
         "WORKER_SOURCE_PATH", DEFAULT_RUNTIME_SOURCE_PATH
     ).strip("/")
     template_source_path = os.environ.get(
         "TEMPLATE_SOURCE_PATH", DEFAULT_TEMPLATE_SOURCE_PATH
     ).strip("/")
-
-    if not repo or "/" not in repo:
-        raise SystemExit("invalid WORKER_SOURCE_REPO")
-    if not ref:
-        raise SystemExit("invalid WORKER_SOURCE_REF")
     if not runtime_source_path:
         raise SystemExit("invalid WORKER_SOURCE_PATH")
     if not template_source_path:
@@ -146,30 +176,42 @@ def main() -> int:
     root_dir = Path(__file__).resolve().parents[1]
     target_runtime_dir = root_dir / "src"
     target_template_dir = root_dir / "templates"
-    archive_data = _download_archive(repo, ref)
-    extracted_runtime, extracted_templates = _extract_all(
-        archive_data,
-        runtime_source_path,
-        template_source_path,
-        target_runtime_dir,
-        target_template_dir,
-    )
+    last_error: str | None = None
 
-    if extracted_runtime == 0:
-        raise SystemExit(
-            f"no runtime extracted from {repo}@{ref}:{runtime_source_path}"
-        )
-    if extracted_templates == 0:
-        raise SystemExit(
-            f"no templates extracted from {repo}@{ref}:{template_source_path}"
-        )
+    for repo, ref in _resolve_source_candidates():
+        try:
+            archive_data = _download_archive(repo, ref)
+            extracted_runtime, extracted_templates = _extract_all(
+                archive_data,
+                runtime_source_path,
+                template_source_path,
+                target_runtime_dir,
+                target_template_dir,
+            )
+        except Exception as exc:
+            last_error = f"{repo}@{ref}: {exc}"
+            print(f"[sync-worker-assets] skip {last_error}")
+            continue
 
-    print(
-        "[sync-worker-assets] extracted "
-        f"{extracted_runtime} runtime files and {extracted_templates} templates "
-        f"from {repo}@{ref}"
-    )
-    return 0
+        if extracted_runtime == 0:
+            last_error = f"no runtime extracted from {repo}@{ref}:{runtime_source_path}"
+            print(f"[sync-worker-assets] skip {last_error}")
+            continue
+        if extracted_templates == 0:
+            last_error = (
+                f"no templates extracted from {repo}@{ref}:{template_source_path}"
+            )
+            print(f"[sync-worker-assets] skip {last_error}")
+            continue
+
+        print(
+            "[sync-worker-assets] extracted "
+            f"{extracted_runtime} runtime files and {extracted_templates} templates "
+            f"from {repo}@{ref}"
+        )
+        return 0
+
+    raise SystemExit(last_error or "unable to resolve worker asset source")
 
 
 if __name__ == "__main__":
