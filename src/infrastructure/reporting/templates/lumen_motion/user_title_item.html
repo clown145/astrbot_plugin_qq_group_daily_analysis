@@ -1,0 +1,25 @@
+{% if titles %}
+<div class="lm-title-grid">
+    {% for item in titles %}
+    <article class="lm-title-card avoid-break">
+        <div class="lm-title-avatar-wrap">
+            {% if item.avatar_data %}
+            <img class="lm-title-avatar" src="{{ item.avatar_data }}" alt="{{ item.name }}">
+            {% else %}
+            <div class="lm-title-avatar lm-title-avatar-fallback">ID</div>
+            {% endif %}
+        </div>
+        <div class="lm-title-content">
+            <div class="lm-title-topline">
+                <h3 class="lm-title-name">{{ item.name }}</h3>
+                <span class="lm-title-badge lm-title-badge-mbti">{{ item.mbti }}</span>
+            </div>
+            <div class="lm-title-badge-row">
+                <span class="lm-title-badge lm-title-badge-role">{{ item.title }}</span>
+            </div>
+            <p class="lm-title-reason">{{ item.reason }}</p>
+        </div>
+    </article>
+    {% endfor %}
+</div>
+{% endif %}

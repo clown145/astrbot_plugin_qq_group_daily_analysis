@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Lumen Motion PDF · {{ current_date }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Noto+Sans+SC:wght@400;500;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <style>
+        @page {
+            size: A4;
+            margin: 14mm;
+        }
+
+        :root {
+            --lm-bg: #f6f8fb;
+            --lm-surface: #ffffff;
+            --lm-surface-soft: #f7faff;
+            --lm-text: #122033;
+            --lm-text-soft: #5b6980;
+            --lm-text-faint: #7a8596;
+            --lm-line: rgba(18, 32, 51, 0.08);
+            --lm-accent: #3b82f6;
+            --lm-accent-2: #12b981;
+            --lm-accent-3: #f59e0b;
+            --lm-font-heading: "Space Grotesk", "Noto Sans SC", sans-serif;
+            --lm-font-body: "Noto Sans SC", sans-serif;
+            --lm-font-mono: "IBM Plex Mono", monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            font-family: var(--lm-font-body);
+            color: var(--lm-text);
+            background: var(--lm-bg);
+        }
+
+        .lm-shell {
+            background: var(--lm-surface);
+            border: 1px solid var(--lm-line);
+            border-radius: 24px;
+            overflow: hidden;
+        }
+
+        .lm-hero {
+            padding: 28px;
+            border-bottom: 1px solid var(--lm-line);
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(18, 185, 129, 0.08));
+        }
+
+        .lm-kicker,
+        .lm-chip,
+        .lm-title-badge,
+        .lm-quality-summary-chip {
+            border-radius: 999px;
+            border: 1px solid var(--lm-line);
+        }
+
+        .lm-kicker {
+            display: inline-block;
+            padding: 7px 12px;
+            font-size: 0.8rem;
+            color: var(--lm-text-soft);
+            background: rgba(255, 255, 255, 0.66);
+        }
+
+        .lm-hero-grid,
+        .lm-stage-split,
+        .lm-metric-grid,
+        .lm-topic-grid,
+        .lm-title-grid,
+        .lm-quality-grid {
+            display: grid;
+            gap: 16px;
+        }
+
+        .lm-hero-grid,
+        .lm-stage-split {
+            grid-template-columns: 1.2fr 0.8fr;
+            margin-top: 16px;
+        }
+
+        .lm-title {
+            margin: 0;
+            font-family: var(--lm-font-heading);
+            font-size: 2.2rem;
+            line-height: 1;
+        }
+
+        .lm-subtitle,
+        .lm-topic-detail,
+        .lm-title-reason,
+        .lm-quality-subtitle,
+        .lm-quality-dimension p,
+        .lm-quality-summary,
+        .lm-quote-reason {
+            color: var(--lm-text-soft);
+            line-height: 1.7;
+        }
+
+        .lm-hero-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        .lm-chip {
+            display: inline-block;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.72);
+            color: var(--lm-text-soft);
+            font-size: 0.84rem;
+        }
+
+        .lm-spotlight,
+        .lm-metric-card,
+        .lm-stage,
+        .lm-topic-card,
+        .lm-title-card,
+        .lm-quote-card,
+        .lm-quality-card,
+        .lm-footer-card {
+            background: var(--lm-surface-soft);
+            border: 1px solid var(--lm-line);
+            border-radius: 18px;
+        }
+
+        .lm-spotlight {
+            padding: 20px;
+        }
+
+        .lm-spotlight-label,
+        .lm-section-title span,
+        .lm-metric-label,
+        .lm-quality-kicker,
+        .lm-chart-value,
+        .lm-chart-hour,
+        .lm-topic-meta,
+        .lm-quote-sender,
+        .lm-footer-card {
+            color: var(--lm-text-faint);
+        }
+
+        .lm-spotlight-value,
+        .lm-metric-value {
+            font-family: var(--lm-font-heading);
+            letter-spacing: -0.04em;
+        }
+
+        .lm-spotlight-value {
+            margin-top: 8px;
+            font-size: 2.4rem;
+        }
+
+        .lm-body {
+            padding: 20px;
+            display: grid;
+            gap: 16px;
+        }
+
+        .lm-metric-grid {
+            grid-template-columns: repeat(4, 1fr);
+        }
+
+        .lm-metric-card {
+            padding: 16px;
+        }
+
+        .lm-metric-value {
+            margin-top: 8px;
+            font-size: 1.8rem;
+        }
+
+        .lm-stage {
+            padding: 18px;
+        }
+
+        .lm-section-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .lm-section-title h2,
+        .lm-topic-title,
+        .lm-title-name,
+        .lm-quality-title {
+            margin: 0;
+            font-family: var(--lm-font-heading);
+        }
+
+        .lm-topic-grid,
+        .lm-title-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .lm-topic-card,
+        .lm-title-card,
+        .lm-quote-card {
+            padding: 14px;
+        }
+
+        .lm-topic-head {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .lm-topic-index {
+            min-width: 52px;
+            padding: 8px 0;
+            border-radius: 14px;
+            text-align: center;
+            background: linear-gradient(135deg, var(--lm-accent), var(--lm-accent-2));
+            color: white;
+            font-family: var(--lm-font-heading);
+        }
+
+        .lm-title-card,
+        .lm-quote-card {
+            display: grid;
+            grid-template-columns: 64px 1fr;
+            gap: 14px;
+        }
+
+        .lm-title-avatar-wrap,
+        .lm-quote-avatar-wrap {
+            width: 64px;
+            height: 64px;
+            border-radius: 18px;
+            overflow: hidden;
+            background: rgba(59, 130, 246, 0.12);
+            border: 1px solid var(--lm-line);
+        }
+
+        .lm-title-avatar,
+        .lm-quote-avatar {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .lm-title-avatar-fallback {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            font-family: var(--lm-font-mono);
+        }
+
+        .lm-title-topline,
+        .lm-quality-dimension-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .lm-title-badge-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 8px;
+            flex-wrap: wrap;
+        }
+
+        .lm-title-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            font-size: 0.78rem;
+        }
+
+        .lm-title-badge-role {
+            color: white;
+            border-color: transparent;
+            background: linear-gradient(135deg, var(--lm-accent), var(--lm-accent-3));
+        }
+
+        .lm-title-badge-mbti {
+            background: rgba(59, 130, 246, 0.08);
+        }
+
+        .lm-quote-mark {
+            font-family: var(--lm-font-heading);
+            font-size: 3rem;
+            line-height: 1;
+            color: rgba(59, 130, 246, 0.18);
+        }
+
+        .lm-quote-content {
+            margin-top: -22px;
+            padding-left: 18px;
+            line-height: 1.75;
+        }
+
+        .lm-quote-sender {
+            margin-top: 8px;
+            padding-left: 18px;
+            font-size: 0.84rem;
+        }
+
+        .lm-quote-reason {
+            margin-top: 10px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: rgba(59, 130, 246, 0.08);
+            font-size: 0.88rem;
+        }
+
+        .lm-quality-card {
+            padding: 16px;
+        }
+
+        .lm-quality-summary-chip {
+            padding: 7px 10px;
+            font-size: 0.8rem;
+            color: var(--lm-accent-2);
+            border-color: rgba(18, 185, 129, 0.18);
+            background: rgba(18, 185, 129, 0.08);
+        }
+
+        .lm-quality-bar {
+            display: flex;
+            height: 10px;
+            margin: 16px 0;
+            overflow: hidden;
+            border-radius: 999px;
+            background: rgba(148, 163, 184, 0.18);
+        }
+
+        .lm-quality-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .lm-quality-dimension {
+            padding: 12px;
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.52);
+            border: 1px solid var(--lm-line);
+        }
+
+        .lm-chart-grid {
+            display: grid;
+            grid-template-columns: repeat(24, 1fr);
+            gap: 6px;
+            align-items: end;
+            min-height: 220px;
+        }
+
+        .lm-chart-col {
+            display: grid;
+            gap: 6px;
+            align-items: end;
+            justify-items: center;
+        }
+
+        .lm-chart-track {
+            width: 100%;
+            height: 156px;
+            padding: 4px;
+            display: flex;
+            align-items: end;
+            border-radius: 14px;
+            background: rgba(148, 163, 184, 0.12);
+            border: 1px solid var(--lm-line);
+        }
+
+        .lm-chart-bar {
+            width: 100%;
+            border-radius: 10px;
+            background: linear-gradient(180deg, var(--lm-accent), var(--lm-accent-2));
+        }
+
+        .lm-chart-value,
+        .lm-chart-hour {
+            font-family: var(--lm-font-mono);
+            font-size: 0.68rem;
+        }
+
+        .lm-footer {
+            padding: 0 20px 20px;
+        }
+
+        .lm-footer-card {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            padding: 14px 16px;
+            font-size: 0.82rem;
+        }
+
+        .lm-footer-card strong {
+            color: var(--lm-text);
+        }
+
+        .avoid-break {
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="lm-shell">
+        <header class="lm-hero">
+            <div class="lm-kicker">Lumen Motion Report</div>
+            <div class="lm-hero-grid">
+                <div>
+                    <h1 class="lm-title">群聊分析报告<br>{{ current_date }}</h1>
+                    <p class="lm-subtitle">这是一套偏清透杂志化的日报模板，适合 PDF 导出、长期存档和更克制的视觉表达。</p>
+                    <div class="lm-hero-meta">
+                        <span class="lm-chip">消息 {{ message_count }}</span>
+                        <span class="lm-chip">参与 {{ participant_count }}</span>
+                        <span class="lm-chip">字符 {{ total_characters }}</span>
+                        <span class="lm-chip">表情 {{ emoji_count }}</span>
+                    </div>
+                </div>
+                <div class="lm-spotlight">
+                    <div class="lm-spotlight-label">Peak Window</div>
+                    <div class="lm-spotlight-value">{{ most_active_period }}</div>
+                    <div class="lm-subtitle" style="margin-top: 10px;">静态导出场景保留了与网页端一致的结构，但去掉了动态效果，确保最终排版稳定。</div>
+                </div>
+            </div>
+        </header>
+
+        <main class="lm-body">
+            <section class="lm-metric-grid">
+                <div class="lm-metric-card">
+                    <div class="lm-metric-label">消息总数</div>
+                    <div class="lm-metric-value">{{ message_count }}</div>
+                </div>
+                <div class="lm-metric-card">
+                    <div class="lm-metric-label">参与人数</div>
+                    <div class="lm-metric-value">{{ participant_count }}</div>
+                </div>
+                <div class="lm-metric-card">
+                    <div class="lm-metric-label">总字符数</div>
+                    <div class="lm-metric-value">{{ total_characters }}</div>
+                </div>
+                <div class="lm-metric-card">
+                    <div class="lm-metric-label">表情数量</div>
+                    <div class="lm-metric-value">{{ emoji_count }}</div>
+                </div>
+            </section>
+
+            <section class="lm-stage lm-stage-split avoid-break">
+                <div>
+                    <div class="lm-section-title">
+                        <h2>活跃时序</h2>
+                        <span>24h rhythm</span>
+                    </div>
+                    {{ hourly_chart_html | safe }}
+                </div>
+                {% if chat_quality_html %}
+                <div>
+                    <div class="lm-section-title">
+                        <h2>聊天质量</h2>
+                        <span>ai reading</span>
+                    </div>
+                    {{ chat_quality_html | safe }}
+                </div>
+                {% endif %}
+            </section>
+
+            <section class="lm-stage">
+                <div class="lm-section-title">
+                    <h2>核心话题</h2>
+                    <span>topics</span>
+                </div>
+                {{ topics_html | safe }}
+            </section>
+
+            <section class="lm-stage">
+                <div class="lm-section-title">
+                    <h2>群友称号</h2>
+                    <span>people</span>
+                </div>
+                {{ titles_html | safe }}
+            </section>
+
+            <section class="lm-stage">
+                <div class="lm-section-title">
+                    <h2>金句截面</h2>
+                    <span>quotes</span>
+                </div>
+                {{ quotes_html | safe }}
+            </section>
+        </main>
+
+        <footer class="lm-footer">
+            <div class="lm-footer-card">
+                <div>
+                    <strong>Lumen Motion</strong><br>
+                    Generated at {{ current_datetime }}
+                </div>
+                <div>
+                    Tokens {{ total_tokens }} · Prompt {{ prompt_tokens }} · Completion {{ completion_tokens }}
+                </div>
+            </div>
+        </footer>
+    </div>
+</body>
+
+</html>

@@ -1,0 +1,37 @@
+<div class="lm-quality-card avoid-break">
+    <div class="lm-quality-head">
+        <div>
+            <div class="lm-quality-kicker">Chat Quality</div>
+            <h3 class="lm-quality-title">{{ title }}</h3>
+            {% if subtitle %}
+            <p class="lm-quality-subtitle">{{ subtitle }}</p>
+            {% endif %}
+        </div>
+        <div class="lm-quality-summary-chip">AI 观察</div>
+    </div>
+
+    <div class="lm-quality-bar">
+        {% for dim in dimensions %}
+        {% if dim.percentage > 0 %}
+        <div class="lm-quality-segment" style="width: {{ dim.percentage }}%; background: {{ dim.color }};"
+            title="{{ dim.name }} / {{ '%.1f' | format(dim.percentage | float) }}%"></div>
+        {% endif %}
+        {% endfor %}
+    </div>
+
+    <div class="lm-quality-grid">
+        {% for dim in dimensions %}
+        {% if dim.percentage > 0 %}
+        <div class="lm-quality-dimension">
+            <div class="lm-quality-dimension-top">
+                <span>{{ dim.name }}</span>
+                <strong>{{ '%.1f' | format(dim.percentage | float) }}%</strong>
+            </div>
+            <p>{{ dim.comment }}</p>
+        </div>
+        {% endif %}
+        {% endfor %}
+    </div>
+
+    <div class="lm-quality-summary">{{ summary }}</div>
+</div>

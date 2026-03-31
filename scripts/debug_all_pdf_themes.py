@@ -227,6 +227,7 @@ async def main():
         "spring_festival",
         "format",
         "HatsuneMiku",
+        "lumen_motion",
     ]
     for theme in themes:
         await generate_theme(theme)
