@@ -1,0 +1,16 @@
+{% if topics %}
+<div class="lm-topic-grid">
+    {% for item in topics %}
+    <article class="lm-topic-card avoid-break">
+        <div class="lm-topic-head">
+            <div class="lm-topic-index">#{{ "%02d" | format(item.index) }}</div>
+            <div>
+                <h3 class="lm-topic-title">{{ item.topic.topic }}</h3>
+                <div class="lm-topic-meta">参与者：{{ item.contributors }}</div>
+            </div>
+        </div>
+        <div class="lm-topic-detail">{{ item.detail | safe }}</div>
+    </article>
+    {% endfor %}
+</div>
+{% endif %}
