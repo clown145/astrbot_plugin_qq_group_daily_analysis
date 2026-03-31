@@ -9,24 +9,11 @@
       },
       "UPLOAD_TOKEN": {
         "description": "Shared secret used by the plugin and Worker."
-      },
-      "WORKER_SOURCE_REPO": {
-        "description": "Optional override for the GitHub repo slug to sync from. Default: detect current origin repo."
-      },
-      "WORKER_SOURCE_REF": {
-        "description": "Optional override for the git ref to sync from. Default: current HEAD commit."
-      },
-      "WORKER_SOURCE_PATH": {
-        "description": "Worker runtime path. Default: src/infrastructure/reporting/web_worker_runtime"
-      },
-      "TEMPLATE_SOURCE_PATH": {
-        "description": "Template source path. Default: src/infrastructure/reporting/templates"
       }
     }
   },
   "scripts": {
-    "sync-templates": "python3 scripts/sync_templates.py",
-    "deploy": "python3 scripts/sync_templates.py && python3 -m pip install --disable-pip-version-check uv >/dev/null && uv run pywrangler deploy",
-    "dev": "python3 scripts/sync_templates.py && python3 -m pip install --disable-pip-version-check uv >/dev/null && uv run pywrangler dev"
+    "deploy": "python3 -m pip install --disable-pip-version-check uv >/dev/null && uv run pywrangler deploy",
+    "dev": "python3 -m pip install --disable-pip-version-check uv >/dev/null && uv run pywrangler dev"
   }
 }

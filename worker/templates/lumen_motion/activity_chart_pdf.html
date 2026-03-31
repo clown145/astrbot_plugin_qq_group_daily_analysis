@@ -1,0 +1,15 @@
+<div class="lm-chart">
+    <div class="lm-chart-grid">
+        {% for item in chart_data %}
+        <div class="lm-chart-col">
+            <div class="lm-chart-value">{{ item.count }}</div>
+            <div class="lm-chart-track">
+                <div class="lm-chart-bar"
+                    style="--bar-target: {{ '%.2f' | format(item.percentage) }}%; height: {{ '%.2f' | format(item.percentage) }}%;">
+                </div>
+            </div>
+            <div class="lm-chart-hour">{{ "%02d" | format(item.hour) }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
