@@ -4,6 +4,7 @@ Cloudflare Python Worker: 存储结构化日报 JSON，并按模板渲染网页�
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import secrets
@@ -15,6 +16,10 @@ from workers import Response, WorkerEntrypoint
 
 from template_loader import AssetTemplateLoader
 from web_report_renderer import normalize_template_name, render_report_html
+
+_RENDERED_HTML_CACHE_LIMIT = 32
+_RENDERED_HTML_CACHE = {}
+_RENDER_LOCK = asyncio.Lock()
 
 _REPORT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{10,64}$")
 _DEFAULT_TEMPLATE = "scrapbook"
@@ -104,24 +109,41 @@ class Default(WorkerEntrypoint):
             request, report_payload, template_loader
         )
 
-        try:
-            env = await template_loader.get_environment(template_name)
-            rendered_html = render_report_html(env, report_payload)
-        except Exception as exc:
-            if template_name != _DEFAULT_TEMPLATE:
-                try:
-                    env = await template_loader.get_environment(_DEFAULT_TEMPLATE)
-                    rendered_html = render_report_html(env, report_payload)
-                except Exception as fallback_exc:
-                    return Response(f"render error: {fallback_exc}", status=500)
-            else:
-                return Response(f"render error: {exc}", status=500)
+        cache_key = f"{report_id}:{template_name}"
+        rendered_html = _RENDERED_HTML_CACHE.get(cache_key)
 
-        rendered_html = self._force_desktop_viewport(rendered_html)
+        if not rendered_html:
+            async with _RENDER_LOCK:
+                rendered_html = _RENDERED_HTML_CACHE.get(cache_key)
+                if not rendered_html:
+                    try:
+                        env = await template_loader.get_environment(template_name)
+                        rendered_html = render_report_html(env, report_payload)
+                    except Exception as exc:
+                        if template_name != _DEFAULT_TEMPLATE:
+                            try:
+                                env = await template_loader.get_environment(
+                                    _DEFAULT_TEMPLATE
+                                )
+                                rendered_html = render_report_html(env, report_payload)
+                            except Exception as fallback_exc:
+                                return Response(
+                                    f"render error: {fallback_exc}", status=500
+                                )
+                        else:
+                            return Response(f"render error: {exc}", status=500)
+
+                    rendered_html = self._force_desktop_viewport(rendered_html)
+
+                    if len(_RENDERED_HTML_CACHE) >= _RENDERED_HTML_CACHE_LIMIT:
+                        oldest_key = next(iter(_RENDERED_HTML_CACHE))
+                        del _RENDERED_HTML_CACHE[oldest_key]
+
+                    _RENDERED_HTML_CACHE[cache_key] = rendered_html
 
         headers = {
             "content-type": "text/html; charset=utf-8",
-            "cache-control": "no-store",
+            "cache-control": "public, max-age=86400",
             "x-robots-tag": "noindex, nofollow, noarchive",
             "referrer-policy": "no-referrer",
             "x-content-type-options": "nosniff",
