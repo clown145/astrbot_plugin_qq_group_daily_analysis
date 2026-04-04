@@ -190,6 +190,7 @@ class AnalysisApplicationService:
                 len(unified_messages),
                 max(len(raw_messages) - len(unified_messages), 0),
             )
+            group_name = await self._resolve_group_name(adapter, group_id)
 
             # 4. 检查最小消息阈值 (在清理后进行)
             threshold = self.config_manager.get_min_messages_threshold()
@@ -293,6 +294,26 @@ class AnalysisApplicationService:
                 "adapter": adapter,
                 "group_id": group_id,
                 "platform_id": getattr(adapter, "platform_id", platform_id),
+                "analysis_context": {
+                    "analysis_kind": "daily",
+                    "source_mode": "manual" if manual else "scheduled",
+                    "requested_days": days,
+                    "raw_message_count": len(raw_messages),
+                    "cleaned_message_count": len(unified_messages),
+                    "dropped_message_count": max(
+                        len(raw_messages) - len(unified_messages), 0
+                    ),
+                    "message_limit_hit": len(raw_messages) >= max_count,
+                    "window_start_timestamp": min(
+                        (msg.timestamp for msg in unified_messages),
+                        default=None,
+                    ),
+                    "window_end_timestamp": max(
+                        (msg.timestamp for msg in unified_messages),
+                        default=None,
+                    ),
+                    "group_name": group_name,
+                },
             }
 
     # ----------------------------------------------------------------
@@ -734,6 +755,7 @@ class AnalysisApplicationService:
                 f"话题={len(state.topics)}, 金句={len(state.golden_quotes)}, "
                 f"批次={state.total_analysis_count}"
             )
+            group_name = await self._resolve_group_name(adapter, group_id)
 
             return {
                 "success": True,
@@ -742,6 +764,19 @@ class AnalysisApplicationService:
                 "adapter": adapter,
                 "group_id": group_id,
                 "platform_id": getattr(adapter, "platform_id", platform_id),
+                "analysis_context": {
+                    "analysis_kind": "incremental_final",
+                    "source_mode": "incremental_final",
+                    "requested_days": analysis_days,
+                    "raw_message_count": None,
+                    "cleaned_message_count": state.total_message_count,
+                    "dropped_message_count": None,
+                    "message_limit_hit": None,
+                    "window_start_timestamp": int(window_start),
+                    "window_end_timestamp": int(window_end),
+                    "group_name": group_name,
+                    "batch_count": state.total_analysis_count,
+                },
             }
 
     # ----------------------------------------------------------------
@@ -770,6 +805,22 @@ class AnalysisApplicationService:
             hourly_char[hour] += msg.get_text_length()
 
         return dict(hourly_msg), dict(hourly_char)
+
+    @staticmethod
+    async def _resolve_group_name(adapter: Any, group_id: str) -> str:
+        """尽力解析群名称，失败时静默回退为空字符串。"""
+        if not adapter or not hasattr(adapter, "get_group_info"):
+            return ""
+
+        try:
+            group = await adapter.get_group_info(group_id)
+        except Exception:
+            return ""
+
+        if not group:
+            return ""
+
+        return str(getattr(group, "group_name", "") or "")
 
     @staticmethod
     def _convert_user_activity_for_merge(

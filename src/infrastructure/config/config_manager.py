@@ -22,6 +22,7 @@ class ConfigManager:
     - analysis_features: 分析功能开关
     - incremental: 增量分析设置
     - pdf: PDF 设置
+    - web_blog: Web 博客发布设置
     - prompts: 提示词模板
     """
 
@@ -285,6 +286,52 @@ class ConfigManager:
         """获取HTML文件名格式"""
         return self._get_group("html").get(
             "html_filename_format", "群聊分析报告_{group_id}_{date}.html"
+        )
+
+    def get_web_blog_enabled(self) -> bool:
+        """获取是否启用 Web 博客发布。"""
+        return self._get_group("web_blog").get("enable_web_blog", False)
+
+    def get_web_blog_worker_base_url(self) -> str:
+        """获取 Worker 基础地址。"""
+        return str(self._get_group("web_blog").get("worker_base_url", "") or "").strip()
+
+    def get_web_blog_worker_ingest_path(self) -> str:
+        """获取 Worker ingest 路径。"""
+        return str(
+            self._get_group("web_blog").get("worker_ingest_path", "/api/ingest")
+            or "/api/ingest"
+        ).strip()
+
+    def get_web_blog_worker_bind_verify_path(self) -> str:
+        """获取 Worker 绑定验证路径。"""
+        return str(
+            self._get_group("web_blog").get(
+                "worker_bind_verify_path", "/api/auth/bind/verify"
+            )
+            or "/api/auth/bind/verify"
+        ).strip()
+
+    def get_web_blog_worker_token(self) -> str:
+        """获取 Worker 上传鉴权 Token。"""
+        return str(
+            self._get_group("web_blog").get("worker_upload_token", "") or ""
+        ).strip()
+
+    def get_web_blog_bind_callback_token(self) -> str:
+        """获取 Worker 绑定回调鉴权 Token。留空时回退到上传 Token。"""
+        token = str(
+            self._get_group("web_blog").get("worker_bind_callback_token", "") or ""
+        ).strip()
+        if token:
+            return token
+        return self.get_web_blog_worker_token()
+
+    def get_web_blog_request_timeout_seconds(self) -> int:
+        """获取 Web 博客发布请求超时时间（秒）。"""
+        return int(
+            self._get_group("web_blog").get("worker_request_timeout_seconds", 120)
+            or 120
         )
 
     def get_topic_analysis_prompt(self, style: str = "topic_prompt") -> str:

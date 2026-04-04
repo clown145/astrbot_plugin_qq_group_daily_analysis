@@ -25,16 +25,22 @@ class ReportDispatcher:
         self.report_generator = report_generator
         self.message_sender = message_sender
         self._html_render_func: Callable | None = None
+        self._web_report_publisher: Any | None = None
 
     def set_html_render(self, render_func: Callable):
         """设置 HTML 渲染函数 (运行时注入)"""
         self._html_render_func = render_func
+
+    def set_web_report_publisher(self, publisher: Any):
+        """设置 Web 报告发布器。"""
+        self._web_report_publisher = publisher
 
     async def dispatch(
         self,
         group_id: str,
         analysis_result: dict[str, Any],
         platform_id: str | None = None,
+        result_context: dict[str, Any] | None = None,
     ):
         """
         分发分析报告
@@ -52,6 +58,10 @@ class ReportDispatcher:
             success = await self._dispatch_pdf(group_id, analysis_result, platform_id)
         elif output_format == "html":
             success = await self._dispatch_html(group_id, analysis_result, platform_id)
+        elif output_format == "web":
+            success = await self._dispatch_web(
+                group_id, analysis_result, platform_id, result_context
+            )
         else:
             success = await self._dispatch_text(group_id, analysis_result, platform_id)
 
@@ -173,6 +183,42 @@ class ReportDispatcher:
 
         logger.warning(
             f"[{trace_id}] HTML dispatch failed, falling back to text report."
+        )
+        return await self._dispatch_text(group_id, analysis_result, platform_id)
+
+    async def _dispatch_web(
+        self,
+        group_id: str,
+        analysis_result: dict[str, Any],
+        platform_id: str | None,
+        result_context: dict[str, Any] | None,
+    ) -> bool:
+        trace_id = TraceContext.get()
+
+        if not self._web_report_publisher:
+            logger.warning(f"[{trace_id}] 未设置 Web 报告发布器，回退到文本模式。")
+            return await self._dispatch_text(group_id, analysis_result, platform_id)
+
+        if not result_context:
+            logger.warning(
+                f"[{trace_id}] Web 报告分发缺少完整结果上下文，回退到文本模式。"
+            )
+            return await self._dispatch_text(group_id, analysis_result, platform_id)
+
+        try:
+            publish_result = await self._web_report_publisher.publish_result(
+                result_context
+            )
+            publish_message = self._web_report_publisher.build_success_message(
+                publish_result
+            )
+            if await self.message_sender.send_text(group_id, publish_message, platform_id):
+                return True
+        except Exception as e:
+            logger.error(f"[{trace_id}] Failed to publish web report: {e}")
+
+        logger.warning(
+            f"[{trace_id}] Web dispatch failed, falling back to text report."
         )
         return await self._dispatch_text(group_id, analysis_result, platform_id)
 

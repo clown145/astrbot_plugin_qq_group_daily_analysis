@@ -27,6 +27,7 @@ class AutoScheduler:
         bot_manager,
         report_generator=None,
         html_render_func=None,
+        web_report_publisher=None,
         plugin_instance: Any | None = None,
     ):
         self.config_manager = config_manager
@@ -43,6 +44,8 @@ class AutoScheduler:
         )
         if html_render_func:
             self.report_dispatcher.set_html_render(html_render_func)
+        if web_report_publisher:
+            self.report_dispatcher.set_web_report_publisher(web_report_publisher)
 
         self.scheduler_job_ids = []  # 存储已注册的定时任务 ID
         self.last_executed_target = None  # 记录上次执行的具体时间点，防止重复执行
@@ -477,6 +480,7 @@ class AutoScheduler:
                 adapter.platform_id
                 if hasattr(adapter, "platform_id")
                 else target_platform_id,
+                result_context=result,
             )
 
             logger.info(f"群 {group_id} 自动分析任务执行成功")
@@ -766,6 +770,7 @@ class AutoScheduler:
                 adapter.platform_id
                 if hasattr(adapter, "platform_id")
                 else target_platform_id,
+                result_context=result,
             )
 
             # 清理过期批次（保留 2 倍窗口范围的数据作为缓冲）

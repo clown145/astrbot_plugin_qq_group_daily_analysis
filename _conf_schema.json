@@ -61,7 +61,7 @@
                 "type": "string",
                 "description": "输出格式",
                 "default": "image",
-                "hint": "分析报告的输出格式：image(图片)、text(文本)、pdf(PDF文件)、html(HTML文件)。使用 PDF 需要额外配置，根据文件中的 PDF_功能说明.md 进行配置"
+                "hint": "分析报告的输出格式：image(图片)、text(文本)、pdf(PDF文件)、html(HTML文件)、web(上传到 Worker 生成博客/日报链接)。使用 PDF 需要额外配置；使用 web 需要先配置 web_blog 分组中的 Worker 地址与上传密钥"
             },
             "report_template": {
                 "type": "string",
@@ -384,6 +384,55 @@
                 "description": "HTML文件名格式",
                 "default": "群聊分析报告_${group_id}_${date}_${ulid}.html",
                 "hint": "HTML文件名格式，支持变量：${group_id}(群号)、${date}(日期)、${ulid}(时间排序ID)，支持子目录/层级。"
+            }
+        }
+    },
+    "web_blog": {
+        "description": "Web 博客发布设置",
+        "type": "object",
+        "hint": "用于把分析结果打包后上传到外部 Worker，由 Worker 生成博客首页、日报页面和历史归档链接。启用 web 输出前，请先完整配置此分组。",
+        "items": {
+            "enable_web_blog": {
+                "type": "bool",
+                "description": "启用 Web 博客发布",
+                "default": false,
+                "hint": "总开关。关闭时即使输出格式设置为 web，也不会上传到 Worker，而是回退为文本报告。"
+            },
+            "worker_base_url": {
+                "type": "string",
+                "description": "Worker 基础地址",
+                "default": "",
+                "hint": "Worker 的基础地址，例如 https://example.your-worker.workers.dev 。插件会在此基础上拼接 ingest 路径。"
+            },
+            "worker_ingest_path": {
+                "type": "string",
+                "description": "Worker ingest 路径",
+                "default": "/api/ingest",
+                "hint": "用于接收插件上传数据的 API 路径，默认 /api/ingest 。如果你的 Worker API 路径不同，可在这里调整。"
+            },
+            "worker_bind_verify_path": {
+                "type": "string",
+                "description": "Worker 绑定验证路径",
+                "default": "/api/auth/bind/verify",
+                "hint": "用于 bot 在群里校验一次性绑定码后的回调路径，默认 /api/auth/bind/verify 。用户在网页上发起绑定后，会在群里给 bot 发送 `/绑定博客 <绑定码>`，插件随后调用这个接口。"
+            },
+            "worker_upload_token": {
+                "type": "string",
+                "description": "Worker 上传密钥",
+                "default": "",
+                "hint": "插件调用 Worker ingest API 时使用的 Bearer Token / 私钥。请与 Worker 端保持一致。"
+            },
+            "worker_bind_callback_token": {
+                "type": "string",
+                "description": "Worker 绑定回调密钥",
+                "default": "",
+                "hint": "插件在执行 `/绑定博客` 命令后，调用 Worker 绑定验证接口时使用的 Bearer Token。建议与上传密钥分开配置；留空时将回退复用上传密钥。"
+            },
+            "worker_request_timeout_seconds": {
+                "type": "int",
+                "description": "上传超时时间（秒）",
+                "default": 120,
+                "hint": "由于 web 发布会携带完整日报渲染包与头像数据，请将超时设置得宽松一些。默认 120 秒。"
             }
         }
     },

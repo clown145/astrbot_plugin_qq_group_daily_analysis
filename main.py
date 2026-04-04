@@ -17,6 +17,7 @@ from astrbot.api.event.filter import PermissionType
 from astrbot.api.star import Context, Star, StarTools
 from astrbot.core.message.components import File
 
+from .src.application.blog_export import BlogExportBuilder
 from .src.application.commands.template_command_service import (
     TemplateCommandService,
 )
@@ -31,6 +32,7 @@ from .src.domain.services.analysis_domain_service import AnalysisDomainService
 from .src.domain.services.incremental_merge_service import IncrementalMergeService
 from .src.domain.services.statistics_service import StatisticsService
 from .src.infrastructure.analysis.llm_analyzer import LLMAnalyzer
+from .src.infrastructure.blog_export import WebBlogBindingClient, WebReportPublisher
 from .src.infrastructure.config.config_manager import ConfigManager
 from .src.infrastructure.messaging.message_sender import MessageSender
 from .src.infrastructure.persistence.history_manager import HistoryManager
@@ -60,6 +62,9 @@ class GroupDailyAnalysis(Star):
     bot_manager: BotManager
     history_manager: HistoryManager
     report_generator: ReportGenerator
+    blog_export_builder: BlogExportBuilder
+    web_report_publisher: WebReportPublisher
+    web_blog_binding_client: WebBlogBindingClient
     telegram_group_registry: TelegramGroupRegistry
     statistics_service: StatisticsService
     analysis_domain_service: AnalysisDomainService
@@ -100,6 +105,13 @@ class GroupDailyAnalysis(Star):
             )
 
         self.report_generator = ReportGenerator(self.config_manager, plugin_data_dir)
+        self.blog_export_builder = BlogExportBuilder(
+            self.config_manager, self.report_generator
+        )
+        self.web_report_publisher = WebReportPublisher(
+            self.config_manager, self.blog_export_builder
+        )
+        self.web_blog_binding_client = WebBlogBindingClient(self.config_manager)
 
         # Telegram 注册表 (持久层)
         self.telegram_group_registry = TelegramGroupRegistry(self)
@@ -151,6 +163,7 @@ class GroupDailyAnalysis(Star):
             self.bot_manager,
             self.report_generator,
             self.html_render,
+            web_report_publisher=self.web_report_publisher,
             plugin_instance=self,
         )
 
@@ -670,16 +683,122 @@ class GroupDailyAnalysis(Star):
             else:
                 yield event.plain_result("⚠️ HTML 生成失败。")
 
+        elif output_format == "web":
+            try:
+                publish_result = await self.web_report_publisher.publish_result(result)
+                publish_message = self.web_report_publisher.build_success_message(
+                    publish_result
+                )
+                if not await adapter.send_text(group_id, publish_message):
+                    yield event.plain_result(publish_message)
+                return
+            except Exception as e:
+                logger.error(f"Web 报告发布失败，正在回退到文本报告。群: {group_id}, 错误: {e}")
+                yield event.plain_result(
+                    f"⚠️ Web 报告发布失败，正在发送文本回退报告。\n原因: {str(e)}"
+                )
+                text_report = self.report_generator.generate_text_report(analysis_result)
+                await adapter.send_text_report(group_id, text_report)
+                return
+
         else:
             text_report = self.report_generator.generate_text_report(analysis_result)
             await adapter.send_text_report(group_id, text_report)
+
+    async def build_blog_export_package(self, result: dict) -> dict:
+        """基于现有分析结果构建博客发布数据包。"""
+        group_id = result["group_id"]
+        adapter = result["adapter"]
+
+        async def avatar_url_getter(user_id: str) -> str | None:
+            return await adapter.get_user_avatar_url(user_id)
+
+        async def nickname_getter(user_id: str) -> str | None:
+            try:
+                member = await adapter.get_member_info(group_id, user_id)
+                if member:
+                    return member.card or member.nickname
+            except Exception:
+                pass
+            return None
+
+        return await self.blog_export_builder.build_serialized_package_from_result(
+            result,
+            avatar_url_getter=avatar_url_getter,
+            nickname_getter=nickname_getter,
+        )
+
+    @filter.command("绑定博客", alias={"bind_blog"})
+    async def bind_blog(self, event: AstrMessageEvent, bind_code: str = ""):
+        """
+        在群内确认一次性博客绑定码。
+        用法: /绑定博客 <6位绑定码>
+        """
+        event.should_call_llm(True)
+
+        group_id = self._get_group_id_from_event(event)
+        platform_id = self._get_platform_id_from_event(event)
+        sender_id = event.get_sender_id()
+
+        if not group_id:
+            yield event.plain_result("❌ 请在目标群聊中使用此命令")
+            return
+
+        if not sender_id:
+            yield event.plain_result("❌ 无法识别当前发送者 ID，暂时无法验证绑定")
+            return
+
+        bind_code = str(bind_code or "").strip()
+        if not bind_code:
+            yield event.plain_result("❌ 用法: /绑定博客 <绑定码>")
+            return
+
+        if not bind_code.isdigit() or not (4 <= len(bind_code) <= 10):
+            yield event.plain_result("❌ 绑定码格式无效，请检查网页上显示的一次性数字绑定码")
+            return
+
+        config_ok, config_error = self.web_blog_binding_client.validate_config()
+        if not config_ok:
+            yield event.plain_result(
+                f"❌ 博客绑定验证不可用：{config_error}。\n请先在插件配置中完成 web_blog 分组配置。"
+            )
+            return
+
+        try:
+            response_payload = await self.web_blog_binding_client.verify_bind_code(
+                platform=platform_id,
+                group_id=str(group_id),
+                qq_number=str(sender_id),
+                bind_code=bind_code,
+            )
+        except Exception as e:
+            logger.error(f"博客绑定验证失败: group={group_id}, sender={sender_id}, error={e}")
+            yield event.plain_result(
+                f"❌ 博客绑定验证失败：{str(e)}\n请确认网页上的绑定码尚未过期，并且当前账号、当前群聊都正确。"
+            )
+            return
+
+        blog_info = response_payload.get("blog", {})
+        blog_slug = ""
+        if isinstance(blog_info, dict):
+            blog_slug = str(
+                blog_info.get("slug")
+                or blog_info.get("public_slug")
+                or blog_info.get("blog_slug")
+                or ""
+            ).strip()
+
+        success_message = "✅ 已确认你的博客绑定请求，请回到网页继续设置密码并完成登录。"
+        if blog_slug:
+            success_message += f"\n博客 slug: {blog_slug}"
+        yield event.plain_result(success_message)
 
     @filter.command("设置格式", alias={"set_format"})
     @filter.permission_type(PermissionType.ADMIN)
     async def set_output_format(self, event: AstrMessageEvent, format_type: str = ""):
         """
         设置分析报告输出格式（跨平台支持）
-        用法: /设置格式 [image|text|pdf|html]
+        用法: /设置格式 [image|text|pdf|html|web]
         """
         group_id = self._get_group_id_from_event(event)
 
@@ -701,18 +820,29 @@ class GroupDailyAnalysis(Star):
 • text - 文本格式
 • pdf - PDF 格式 {pdf_status}
 • html - HTML 格式
+• web - 上传到 Worker 生成博客/日报链接
 
 用法: /设置格式 [格式名称]""")
             return
 
         format_type = format_type.lower()
-        if format_type not in ["image", "text", "pdf", "html"]:
-            yield event.plain_result("❌ 无效的格式类型，支持: image, text, pdf, html")
+        if format_type not in ["image", "text", "pdf", "html", "web"]:
+            yield event.plain_result(
+                "❌ 无效的格式类型，支持: image, text, pdf, html, web"
+            )
             return
 
         if format_type == "pdf" and not self.config_manager.playwright_available:
             yield event.plain_result("❌ PDF 格式不可用，请使用 /安装PDF 命令安装依赖")
             return
+
+        if format_type == "web":
+            config_ok, config_error = self.web_report_publisher.validate_config()
+            if not config_ok:
+                yield event.plain_result(
+                    f"❌ Web 格式不可用：{config_error}。\n请先在插件配置中完成 web_blog 分组配置。"
+                )
+                return
 
         self.config_manager.set_output_format(format_type)
         yield event.plain_result(f"✅ 输出格式已设置为: {format_type}")
@@ -918,6 +1048,22 @@ class GroupDailyAnalysis(Star):
             pdf_status = PDFInstaller.get_pdf_status(self.config_manager)
             output_format = self.config_manager.get_output_format()
             min_threshold = self.config_manager.get_min_messages_threshold()
+            web_enabled = self.config_manager.get_web_blog_enabled()
+            web_worker_url = self.config_manager.get_web_blog_worker_base_url()
+            web_status = (
+                f"已启用 ({web_worker_url})"
+                if web_enabled and web_worker_url
+                else ("已启用" if web_enabled else "未启用")
+            )
+            bind_token_configured = (
+                "已配置"
+                if self.config_manager.get_web_blog_bind_callback_token()
+                else (
+                    "回退复用上传密钥"
+                    if self.config_manager.get_web_blog_worker_token()
+                    else "未配置"
+                )
+            )
 
             # 增量分析状态
             incremental_enabled = self.config_manager.get_incremental_enabled()
@@ -942,11 +1088,13 @@ class GroupDailyAnalysis(Star):
 • 调试模式: {debug_status} (增量立即报告)
 • 输出格式: {output_format}
 • PDF 功能: {pdf_status}
+• Web 发布: {web_status}
+• 绑定回调: {bind_token_configured}
 • 最小消息数: {min_threshold}
 
 💡 可用命令: enable, disable, status, reload, test, incremental_debug
-💡 支持的输出格式: image, text, pdf (图片和PDF包含活跃度可视化)
-💡 其他命令: /设置格式, /安装PDF, /增量状态""")
+💡 支持的输出格式: image, text, pdf, html, web
+💡 其他命令: /设置格式, /安装PDF, /增量状态, /绑定博客""")
 
     @filter.command("增量状态", alias={"incremental_status"})
     @filter.permission_type(PermissionType.ADMIN)

@@ -5,6 +5,7 @@
 
 import asyncio
 import base64
+import hashlib
 import html
 import os
 import re
@@ -395,21 +396,16 @@ class ReportGenerator(IReportGenerator):
             )
             logger.info(f"HTML 渲染数据准备完成，包含 {len(render_data)} 个字段")
 
-            # 生成 HTML 内容（使用 Jinja2 渲染器，尝试 html_template.html，失败则回退到 image_template.html）
-            html_content = None
-            try:
-                html_content = self.html_templates.render_template(
-                    "html_template.html", **render_data
-                )
-                logger.info("使用 html_template.html 渲染成功")
-            except Exception as e:
-                logger.warning(
-                    f"html_template.html 不存在或渲染失败，回退到 image_template.html: {e}"
-                )
-                html_content = self.html_templates.render_template(
-                    "image_template.html", **render_data
-                )
-                logger.info("使用 image_template.html 渲染成功")
+            # 生成 HTML 内容（使用已解析的页面模板）
+            template_meta = self.get_active_template_metadata()
+            html_content = self.html_templates.render_template(
+                template_meta["layout_template_name"], **render_data
+            )
+            logger.info(
+                "使用 %s 渲染成功 (模板: %s)",
+                template_meta["layout_template_name"],
+                template_meta["template_name"],
+            )
 
             # 检查HTML内容是否有效
             if not html_content:
@@ -487,6 +483,40 @@ class ReportGenerator(IReportGenerator):
         encoded_relative_url = quote(relative_url, safe="/")
         return caption + f"\n{base_url.rstrip('/')}/{encoded_relative_url}"
 
+    def get_active_template_metadata(self) -> dict[str, str]:
+        """返回当前启用模板的元数据，供博客导出与归档使用。"""
+        template_name = self.config_manager.get_report_template()
+        template_dir = Path(self.html_templates.base_dir) / template_name
+
+        if not template_dir.exists():
+            logger.warning("模板目录不存在: %s，回退到 scrapbook", template_dir)
+            template_name = "scrapbook"
+            template_dir = Path(self.html_templates.base_dir) / template_name
+
+        layout_template_name = "html_template.html"
+        if not (template_dir / layout_template_name).exists():
+            layout_template_name = "image_template.html"
+
+        template_version = self._compute_template_version(template_dir)
+        return {
+            "template_name": template_name,
+            "layout_template_name": layout_template_name,
+            "template_version": template_version,
+        }
+
+    @staticmethod
+    def _compute_template_version(template_dir: Path) -> str:
+        """基于模板目录内容生成稳定指纹，便于远端识别模板版本。"""
+        digest = hashlib.sha256()
+        for template_file in sorted(template_dir.glob("*.html")):
+            digest.update(template_file.name.encode("utf-8"))
+            try:
+                digest.update(template_file.read_bytes())
+            except OSError:
+                continue
+
+        return digest.hexdigest()[:16]
+
     @staticmethod
     def _force_desktop_viewport(rendered_html: str) -> str:
         """统一导出 HTML 的 viewport，避免移动端按窄屏重排。"""
@@ -553,46 +583,100 @@ class ReportGenerator(IReportGenerator):
         avatar_url_getter=None,
         nickname_getter=None,
     ) -> dict:
-        """准备渲染数据"""
+        """准备当前模板系统使用的最终渲染数据。"""
+        render_bundle = await self.build_report_render_bundle(
+            analysis_result,
+            avatar_url_getter=avatar_url_getter,
+            nickname_getter=nickname_getter,
+        )
+
+        topics_html = self.html_templates.render_template(
+            "topic_item.html", topics=render_bundle["topics"]
+        )
+        logger.info(f"话题HTML生成完成，长度: {len(topics_html)}")
+
+        titles_html = self.html_templates.render_template(
+            "user_title_item.html", titles=render_bundle["titles"]
+        )
+        logger.info(f"用户称号HTML生成完成，长度: {len(titles_html)}")
+
+        quotes_html = self.html_templates.render_template(
+            "quote_item.html", quotes=render_bundle["quotes"]
+        )
+        logger.info(f"金句HTML生成完成，长度: {len(quotes_html)}")
+
+        hourly_chart_html = self.html_templates.render_template(
+            chart_template, chart_data=render_bundle["chart_data"]
+        )
+        logger.info(f"活跃度图表HTML生成完成，长度: {len(hourly_chart_html)}")
+
+        chat_quality_html = ""
+        if render_bundle["chat_quality_review"]:
+            chat_quality_html = self.html_templates.render_template(
+                "chat_quality_item.html", **render_bundle["chat_quality_review"]
+            )
+            logger.info(f"聊天质量锐评HTML生成完成，长度: {len(chat_quality_html)}")
+
+        render_data = {
+            "current_date": render_bundle["current_date"],
+            "current_datetime": render_bundle["current_datetime"],
+            "message_count": render_bundle["message_count"],
+            "participant_count": render_bundle["participant_count"],
+            "total_characters": render_bundle["total_characters"],
+            "emoji_count": render_bundle["emoji_count"],
+            "most_active_period": render_bundle["most_active_period"],
+            "topics_html": topics_html,
+            "titles_html": titles_html,
+            "quotes_html": quotes_html,
+            "hourly_chart_html": hourly_chart_html,
+            "chat_quality_html": chat_quality_html,
+            "total_tokens": render_bundle["token_usage"]["total_tokens"],
+            "prompt_tokens": render_bundle["token_usage"]["prompt_tokens"],
+            "completion_tokens": render_bundle["token_usage"]["completion_tokens"],
+        }
+
+        logger.info(f"渲染数据准备完成，包含 {len(render_data)} 个字段")
+        return render_data
+
+    async def build_report_render_bundle(
+        self,
+        analysis_result: dict,
+        avatar_url_getter=None,
+        nickname_getter=None,
+    ) -> dict:
+        """构建结构化渲染包，供博客导出与远端 Worker 复用。"""
         stats = analysis_result["statistics"]
         topics = analysis_result["topics"]
         user_titles = analysis_result["user_titles"]
         activity_viz = stats.activity_visualization
-
-        # 使用Jinja2模板构建话题HTML（批量渲染）
-        max_topics = self.config_manager.get_max_topics()
-        topics_list = []
+        golden_quotes = getattr(stats, "golden_quotes", [])
+        current_dt = datetime.now()
         user_analysis = analysis_result.get("user_analysis")
 
+        max_topics = self.config_manager.get_max_topics()
+        topics_list = []
         for i, topic in enumerate(topics[:max_topics], 1):
-            # 处理话题详情中的用户引用头像
             processed_detail = await self._render_mentions(
                 topic.detail, avatar_url_getter, nickname_getter, user_analysis
             )
             topics_list.append(
                 {
                     "index": i,
-                    "topic": topic,
-                    "contributors": "、".join(topic.contributors),
-                    "detail": processed_detail,
+                    "topic": self._normalize_topic_payload(topic),
+                    "contributors": "、".join(getattr(topic, "contributors", []) or []),
+                    "detail": str(processed_detail),
                 }
             )
 
-        topics_html = self.html_templates.render_template(
-            "topic_item.html", topics=topics_list
-        )
-        logger.info(f"话题HTML生成完成，长度: {len(topics_html)}")
-
-        # 使用Jinja2模板构建用户称号HTML（批量渲染，包含头像）
         max_user_titles = self.config_manager.get_max_user_titles()
         titles_list = []
         for title in user_titles[:max_user_titles]:
-            # 获取用户头像
             avatar_data = await self._get_user_avatar(
                 str(title.user_id), avatar_url_getter
             )
             title_data = {
                 "name": title.name,
+                "user_id": str(title.user_id),
                 "title": title.title,
                 "mbti": title.mbti,
                 "reason": title.reason,
@@ -600,23 +684,16 @@ class ReportGenerator(IReportGenerator):
             }
             titles_list.append(title_data)
 
-        titles_html = self.html_templates.render_template(
-            "user_title_item.html", titles=titles_list
-        )
-        logger.info(f"用户称号HTML生成完成，长度: {len(titles_html)}")
-
-        # 使用Jinja2模板构建金句HTML（批量渲染）
         max_golden_quotes = self.config_manager.get_max_golden_quotes()
         quotes_list = []
-        for golden_quote in stats.golden_quotes[:max_golden_quotes]:
-            avatar_url = (
+        for golden_quote in golden_quotes[:max_golden_quotes]:
+            avatar_data = (
                 await self._get_user_avatar(
                     str(golden_quote.user_id), avatar_url_getter
                 )
                 if golden_quote.user_id
                 else None
             )
-            # 处理解析锐评中的用户引用头像
             processed_reason = await self._render_mentions(
                 golden_quote.reason, avatar_url_getter, nickname_getter, user_analysis
             )
@@ -624,83 +701,107 @@ class ReportGenerator(IReportGenerator):
                 {
                     "content": golden_quote.content,
                     "sender": golden_quote.sender,
-                    "reason": processed_reason,
-                    "avatar_url": avatar_url,
+                    "reason": str(processed_reason),
+                    "user_id": str(golden_quote.user_id or ""),
+                    "avatar_url": avatar_data,
                 }
             )
 
-        quotes_html = self.html_templates.render_template(
-            "quote_item.html", quotes=quotes_list
-        )
-        logger.info(f"金句HTML生成完成，长度: {len(quotes_html)}")
-
-        # 生成活跃度可视化HTML
         chart_data = self.activity_visualizer.get_hourly_chart_data(
-            activity_viz.hourly_activity
+            self._normalize_activity_map(getattr(activity_viz, "hourly_activity", {}))
         )
-        hourly_chart_html = self.html_templates.render_template(
-            chart_template, chart_data=chart_data
-        )
-        logger.info(f"活跃度图表HTML生成完成，长度: {len(hourly_chart_html)}")
 
-        # 生成聊天质量锐评HTML
-        chat_quality_html = ""
-        chat_quality_review = analysis_result.get("chat_quality_review")
-        if not chat_quality_review and hasattr(stats, "chat_quality_review"):
-            chat_quality_review = stats.chat_quality_review
-
-        if chat_quality_review:
-            # 如果是对象，转为字典（为了统一渲染）
-            if hasattr(chat_quality_review, "dimensions"):
-                review_data = {
-                    "title": chat_quality_review.title,
-                    "subtitle": chat_quality_review.subtitle,
-                    "dimensions": [
-                        {
-                            "name": d.name,
-                            "percentage": d.percentage,
-                            "comment": d.comment,
-                            "color": d.color,
-                        }
-                        for d in chat_quality_review.dimensions
-                    ],
-                    "summary": chat_quality_review.summary,
-                }
-            else:
-                review_data = chat_quality_review
-
-            chat_quality_html = self.html_templates.render_template(
-                "chat_quality_item.html", **review_data
-            )
-            logger.info(f"聊天质量锐评HTML生成完成，长度: {len(chat_quality_html)}")
-
-        # 准备最终渲染数据
-        render_data = {
-            "current_date": datetime.now().strftime("%Y年%m月%d日"),
-            "current_datetime": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        render_bundle = {
+            "current_date": current_dt.strftime("%Y年%m月%d日"),
+            "current_datetime": current_dt.strftime("%Y-%m-%d %H:%M:%S"),
             "message_count": stats.message_count,
             "participant_count": stats.participant_count,
             "total_characters": stats.total_characters,
             "emoji_count": stats.emoji_count,
             "most_active_period": stats.most_active_period,
-            "topics_html": topics_html,
-            "titles_html": titles_html,
-            "quotes_html": quotes_html,
-            "hourly_chart_html": hourly_chart_html,
-            "chat_quality_html": chat_quality_html,
-            "total_tokens": stats.token_usage.total_tokens
-            if stats.token_usage.total_tokens
-            else 0,
-            "prompt_tokens": stats.token_usage.prompt_tokens
-            if stats.token_usage.prompt_tokens
-            else 0,
-            "completion_tokens": stats.token_usage.completion_tokens
-            if stats.token_usage.completion_tokens
-            else 0,
+            "topics": topics_list,
+            "titles": titles_list,
+            "quotes": quotes_list,
+            "chart_data": chart_data,
+            "chat_quality_review": self._normalize_chat_quality_review(
+                analysis_result, stats
+            ),
+            "token_usage": {
+                "total_tokens": stats.token_usage.total_tokens
+                if stats.token_usage.total_tokens
+                else 0,
+                "prompt_tokens": stats.token_usage.prompt_tokens
+                if stats.token_usage.prompt_tokens
+                else 0,
+                "completion_tokens": stats.token_usage.completion_tokens
+                if stats.token_usage.completion_tokens
+                else 0,
+            },
         }
 
-        logger.info(f"渲染数据准备完成，包含 {len(render_data)} 个字段")
-        return render_data
+        logger.info(
+            "结构化渲染包准备完成: topics=%s, titles=%s, quotes=%s, chart_points=%s",
+            len(topics_list),
+            len(titles_list),
+            len(quotes_list),
+            len(chart_data),
+        )
+        return render_bundle
+
+    @staticmethod
+    def _normalize_chat_quality_review(
+        analysis_result: dict, stats
+    ) -> dict[str, object] | None:
+        """归一化聊天质量锐评对象，便于序列化和远端渲染。"""
+        chat_quality_review = analysis_result.get("chat_quality_review")
+        if not chat_quality_review and hasattr(stats, "chat_quality_review"):
+            chat_quality_review = stats.chat_quality_review
+
+        if not chat_quality_review:
+            return None
+
+        if hasattr(chat_quality_review, "dimensions"):
+            return {
+                "title": chat_quality_review.title,
+                "subtitle": chat_quality_review.subtitle,
+                "dimensions": [
+                    {
+                        "name": d.name,
+                        "percentage": d.percentage,
+                        "comment": d.comment,
+                        "color": d.color,
+                    }
+                    for d in chat_quality_review.dimensions
+                ],
+                "summary": chat_quality_review.summary,
+            }
+
+        return dict(chat_quality_review)
+
+    @staticmethod
+    def _normalize_topic_payload(topic) -> dict[str, object]:
+        """将不同来源的话题对象统一转成模板兼容字典。"""
+        if hasattr(topic, "to_dict"):
+            data = topic.to_dict()
+            if "topic" in data:
+                return data
+
+        return {
+            "topic": getattr(topic, "topic", getattr(topic, "name", "未知话题")),
+            "contributors": list(getattr(topic, "contributors", []) or []),
+            "detail": getattr(topic, "detail", ""),
+        }
+
+    @staticmethod
+    def _normalize_activity_map(activity_map) -> dict[int, int]:
+        """兼容 tuple/dict 两种 activity 表示。"""
+        if isinstance(activity_map, dict):
+            return {int(hour): int(count) for hour, count in activity_map.items()}
+
+        try:
+            return {int(hour): int(count) for hour, count in dict(activity_map).items()}
+        except Exception:
+            return {}
 
     async def _render_mentions(
         self,
