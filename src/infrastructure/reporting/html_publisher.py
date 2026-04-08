@@ -131,8 +131,8 @@ class HtmlReportPublisher:
         except FileNotFoundError:
             logger.warning("HTML 图床上传失败，本地文件不存在: %s", html_path)
             return None
-        except Exception as e:
-            logger.warning(f"HTML 图床上传异常: {e}")
+        except Exception:
+            logger.exception("HTML 图床上传异常")
             return None
 
         src = self._extract_src(payload)
