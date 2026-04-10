@@ -22,8 +22,7 @@
   </tr>
 </table>
 
-[![QQ Group](https://qq-group-badge.ciallo.de5.net/badge.svg?invite=https%3A%2F%2Fqm.qq.com%2Fq%2FknESGpUcdU&v=12)](https://qm.qq.com/q/knESGpUcdU)
-
+[![QQ群徽章](https://qq-group-badge.ciallo.de5.net/badge.svg?invite=https%3A%2F%2Fqm.qq.com%2Fq%2FknESGpUcdU&template=https%3A%2F%2Fraw.githubusercontent.com%2Fclown145%2Fqq-group-badge%2Fmain%2Fexamples%2Fgroup-badge-template.svg&v=fa21d85)](https://qm.qq.com/q/knESGpUcdU)
 _✨ 一个基于 AstrBot 的智能群聊分析插件，支持 **QQ (OneBot)**、**Telegram**、**Discord**，未来支持更多平台。 [灵感来源](https://github.com/LSTM-Kirigaya/openmcp-tutorial/tree/main/qq-group-summary)。 ✨_
 
 <img src="https://count.getloli.com/@astrbot-qq-group-daily-analysis?name=astrbot-qq-group-daily-analysis&theme=booru-jaypee&padding=6&offset=0&align=top&scale=1&pixelated=1&darkmode=auto" alt="count" />
