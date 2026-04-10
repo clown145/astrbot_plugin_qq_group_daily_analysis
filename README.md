@@ -22,6 +22,11 @@
   </tr>
 </table>
 
+<p align="center">
+  <a href="https://qm.qq.com/q/knESGpUcdU">
+    <img src="https://qq-group-badge.ciallo.de5.net/badge.svg?invite=https://qm.qq.com/q/knESGpUcdU" alt="QQ Group Badge">
+  </a>
+</p>
 
 _✨ 一个基于 AstrBot 的智能群聊分析插件，支持 **QQ (OneBot)**、**Telegram**、**Discord**，未来支持更多平台。 [灵感来源](https://github.com/LSTM-Kirigaya/openmcp-tutorial/tree/main/qq-group-summary)。 ✨_
 
